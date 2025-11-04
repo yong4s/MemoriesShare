@@ -1,0 +1,66 @@
+exclude: fixtures/
+repos:
+  - repo: local
+    hooks:
+      - id: mypy
+        name: Mypy check
+        entry: mypy
+        language: system
+        args: [ --install-types, --non-interactive, apps ]
+        pass_filenames: false
+      - id: safety-production-dependencies-check
+        name: Safety production dependencies check
+        entry: safety
+        args: [ check, --full-report, --file ]
+        language: system
+        files: requirements/production.txt
+      - id: ruff-format
+        name: ruff-format
+        entry: ruff
+        require_serial: true
+        types_or: [ python, pyi ]
+        args: [ format, --preview ]
+        language: python
+        files: apps/
+      - id: ruff
+        name: ruff
+        entry: ruff
+        args: [ check, --fix, --preview ]
+        language: system
+        types: [ python ]
+      - id: trailing-whitespace
+        name: trim trailing whitespace
+        entry: trailing-whitespace-fixer
+        language: python
+        args: [ --markdown-linebreak-ext=md ]
+        types: [ text ]
+        stages: [ commit, push, manual ]
+      - id: end-of-file-fixer
+        name: end-of-file-fixer
+        entry: end-of-file-fixer
+        language: python
+        exclude: static|README.md
+        types: [ text ]
+        stages: [ commit, push, manual ]
+      - id: check-docstring-first
+        name: check-docstring-first
+        entry: check-docstring-first
+        language: python
+        types: [ python ]
+      - id: name-tests-test
+        name: name-tests-test
+        entry: name-tests-test
+        language: python
+        args: [ '--django' ]
+        exclude: factories.py
+        files: (^|/)tests/.+\.py$
+      - id: requirements-txt-fixer
+        name: requirements-txt-fixer
+        entry: requirements-txt-fixer
+        language: python
+        files: (requirements|constraints).*\.txt$
+      - id: double-quote-string-fixer
+        name: fix double quoted strings
+        entry: double-quote-string-fixer
+        language: python
+        types: [ python ]

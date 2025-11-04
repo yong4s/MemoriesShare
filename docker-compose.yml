@@ -1,0 +1,59 @@
+volumes:
+  pg_data:
+    driver: local
+
+x-base: &base-backend
+  env_file:
+    - .env
+  environment:
+    DATABASE_URL: postgres://db_user:db_password@db:5432/db_name
+    DEBUG: "on"
+    ENVIRONMENT: development
+    ALLOWED_HOSTS: localhost,0.0.0.0
+  volumes:
+    - .:/code:delegated
+  depends_on:
+    - db
+
+services:
+  db:
+    image: library/postgres:13
+    volumes:
+      - "pg_data:/var/lib/postgresql/data"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    # ports:
+    #   - "5432:5432"
+
+
+  backend:
+    <<: *base-backend
+    build: .
+    command: sh -c "pip install django-allauth google-api-python-client google-auth-oauthlib cryptography && python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+#  worker:
+#    <<: *base-backend
+#    build: .
+#    command: celery -A apps worker -l INFO -Q default
+#
+#  beat:
+#    <<: *base-backend
+#    build: .
+#    command: celery -A apps beat -l INFO -s /var/run/celerybeat-schedule --pidfile /var/run/celerybeat.pid

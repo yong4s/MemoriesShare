@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Drive OAuth Test</title>
+</head>
+<body>
+    <h1>Google Drive OAuth Test</h1>
+    
+    {% if user.is_authenticated %}
+        <p>Hello, {{ user.email }}!</p>
+        <p>You are logged in via Google.</p>
+        
+        <!-- Test Google Drive access -->
+        {% if user.socialaccount_set.all %}
+            <h2>Social Accounts:</h2>
+            {% for account in user.socialaccount_set.all %}
+                <p>Provider: {{ account.provider }}</p>
+                <p>UID: {{ account.uid }}</p>
+                {% if account.socialtoken_set.all %}
+                    <p>✅ Has access tokens</p>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        
+        <a href="/accounts/logout/">Logout</a>
+    {% else %}
+        <h2>Login with Google Drive</h2>
+        <a href="/accounts/google/login/?process=login">
+            <button>Login with Google Drive</button>
+        </a>
+    {% endif %}
+</body>
+</html>

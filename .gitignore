@@ -1,0 +1,130 @@
+### Python template
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Environments & Secrets
+.env
+.env.local
+.env.development
+.env.staging  
+.env.production
+.env.*.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Secret files
+*.pem
+*.key
+*.p12
+*.crt
+service-account*.json
+google-credentials*.json
+secrets.json
+
+# mkdocs documentation
+/site
+
+# pytype static type analyzer
+.pytype/
+
+### JetBrains IDE
+.idea/
+
+# JIRA plugin
+atlassian-ide-plugin.xml
+
+# Media Flow specific
+media/uploads/
+staticfiles/
+celerybeat-schedule
+celerybeat.pid
+
+# Security & DevOps
+.secrets/
+docker-compose.override.yml
+k8s/secrets/
+terraform/*.tfvars
+terraform/*.tfstate*
+.terraform/
+
+# Monitoring & Logs
+logs/
+*.log.*
+newrelic.ini
+sentry.properties
+
+# IDE & OS
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.backup
+*.dump
+*.sql
+
+# Documentation files (auto-generated or temporary)
+*.md
+!README.md
+
+# Test files in root
+test_*.py
+
+# Claude Code cache
+.claude/
+
+# Cache directories
+.ruff_cache/
+
+# Temporary directories
+old-requirements/
+
+# Frontend lock files
+yarn.lock
+
+# Temporary HTML files
+clerk-token-test.html
+
+# Development scripts
+get_latest_event.py
+start-token-server.py
+install_packages.sh
+
+# Frontend files
+frontend/
