@@ -1,19 +1,27 @@
 volumes:
   pg_data:
     driver: local
+  redis_data:
+    driver: local
 
 x-base: &base-backend
   env_file:
     - .env
   environment:
     DATABASE_URL: postgres://db_user:db_password@db:5432/db_name
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
     DEBUG: "on"
     ENVIRONMENT: development
     ALLOWED_HOSTS: localhost,0.0.0.0
   volumes:
     - .:/code:delegated
   depends_on:
-    - db
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
 
 services:
   db:
@@ -24,15 +32,70 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     # ports:
     #   - "5432:5432"
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - "redis_data:/data"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # ports:
+    #   - "6379:6379"
 
   backend:
     <<: *base-backend
     build: .
-    command: sh -c "pip install django-allauth google-api-python-client google-auth-oauthlib cryptography && python manage.py runserver 0.0.0.0:8000"
+    command: sh -c "pip install django-allauth google-api-python-client google-auth-oauthlib cryptography celery redis && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
+
+  celery-worker:
+    <<: *base-backend
+    build: .
+    command: celery -A settings.main worker --loglevel=info --concurrency=2
+    environment:
+      - C_FORCE_ROOT=1
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A settings.main inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery-beat:
+    <<: *base-backend
+    build: .
+    command: celery -A settings.main beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      - C_FORCE_ROOT=1
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep 'celery.*beat' | grep -v grep"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery-flower:
+    <<: *base-backend
+    build: .
+    command: celery -A settings.main flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - C_FORCE_ROOT=1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5555/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 

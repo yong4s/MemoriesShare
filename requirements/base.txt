@@ -27,3 +27,10 @@ cryptography>=41.0.0
 qrcode[pil]==7.4.2
 Pillow>=10.0.0
 
+# Celery for async tasks
+celery[redis]==5.3.4
+redis==5.0.1
+django-celery-beat==2.6.0
+flower==2.0.1
+django-redis==5.4.0
+
