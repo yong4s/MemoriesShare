@@ -14,11 +14,16 @@ from django.db import transaction
 
 class CustomUserManager(BaseUserManager):
     """
-    Custom manager for unified user model.
+    Custom manager for unified user model with new authentication logic.
+
+    User Types:
+    - is_registered=True: Traditional users with email + password
+    - is_registered=False: Passwordless users (magic link) OR guest users
 
     Provides specialized methods for:
-    - Creating registered users with email/password
-    - Creating guest users without authentication
+    - Creating registered users with email/password (traditional auth)
+    - Creating passwordless users with email only (magic link auth)
+    - Creating guest users without email/password (event participation)
     - Converting between user types
     - Querying by user type
     """
@@ -35,27 +40,32 @@ class CustomUserManager(BaseUserManager):
         self, email: str | None = None, password: str | None = None, is_registered: bool = True, **extra_fields
     ):
         """
-        Create regular user (registered by default).
+        Create user with new is_registered logic.
 
         Args:
             email: User email (required for registered users)
-            password: User password (required for registered users)
-            is_registered: Whether user is registered (default: True)
+            password: User password (required for registered users, forbidden for passwordless)
+            is_registered: True=traditional auth, False=passwordless/guest
             **extra_fields: Additional user fields
 
         Returns:
             CustomUser instance
 
         Raises:
-            ValueError: If required fields are missing
+            ValueError: If required fields are missing or invalid combination
             ValidationError: If validation fails
         """
-        # Validate required fields for registered users
-        if is_registered and not email:
-            raise ValueError('Registered users must have an email address')
+        # NEW LOGIC: is_registered=True requires email and password
+        if is_registered:
+            if not email:
+                raise ValueError('Registered users must have an email address')
+            if not password:
+                raise ValueError('Registered users must have a password')
 
-        if is_registered and not password:
-            raise ValueError('Registered users must have a password')
+        # NEW LOGIC: is_registered=False means passwordless or guest
+        elif password:
+            raise ValueError('Passwordless users cannot have passwords')
+            # Guest users (no email) must have guest_name, but that's validated in model.clean()
 
         # Normalize email if provided
         if email:
@@ -68,7 +78,7 @@ class CustomUserManager(BaseUserManager):
         # Create user instance
         user = self.model(email=email, **extra_fields)
 
-        # Set password for registered users
+        # Set password based on is_registered flag
         if is_registered and password:
             user.set_password(password)
         else:
@@ -101,7 +111,28 @@ class CustomUserManager(BaseUserManager):
         if not extra_fields.get('is_superuser'):
             raise ValueError('Superuser must have is_superuser=True')
 
-        return self.create_user(email, password, is_registered=True, **extra_fields)
+        return self.create_user(email, password, **extra_fields)
+
+    def create_passwordless_user(self, email: str, **extra_fields) -> 'CustomUser':
+        """
+        Create passwordless user for magic link authentication.
+
+        Args:
+            email: User email (required)
+            **extra_fields: Additional fields
+
+        Returns:
+            CustomUser instance configured for passwordless auth
+
+        Raises:
+            ValueError: If email is missing
+        """
+        if not email:
+            raise ValueError('Passwordless users must have an email address')
+
+        extra_fields.setdefault('is_active', True)
+
+        return self.create_user(email=email, password=None, is_registered=False, **extra_fields)
 
     @transaction.atomic
     def create_guest_user(self, guest_name: str, invite_token: str | None = None, **extra_fields) -> 'CustomUser':
@@ -116,7 +147,6 @@ class CustomUserManager(BaseUserManager):
         Returns:
             CustomUser instance configured as guest
         """
-        extra_fields.setdefault('is_registered', False)
         extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('guest_name', guest_name)
 
@@ -146,24 +176,36 @@ class CustomUserManager(BaseUserManager):
         )
 
     def registered_users(self):
-        """Get queryset of only registered users"""
+        """Get queryset of traditional users with passwords (is_registered=True)"""
         return self.filter(is_registered=True)
 
+    def passwordless_users(self):
+        """Get queryset of passwordless users with email (is_registered=False, email exists)"""
+        return self.filter(is_registered=False, email__isnull=False)
+
     def guest_users(self):
-        """Get queryset of only guest users"""
+        """Get queryset of guest users without email (is_registered=False, no email)"""
+        return self.filter(is_registered=False, email__isnull=True)
+
+    def all_non_registered_users(self):
+        """Get queryset of all passwordless + guest users (is_registered=False)"""
         return self.filter(is_registered=False)
 
     def active_users(self):
-        """Get queryset of active users (both types)"""
+        """Get queryset of active users (all types)"""
         return self.filter(is_active=True)
 
     def active_registered_users(self):
-        """Get queryset of active registered users"""
+        """Get queryset of active traditional users"""
         return self.filter(is_registered=True, is_active=True)
+
+    def active_passwordless_users(self):
+        """Get queryset of active passwordless users"""
+        return self.filter(is_registered=False, is_active=True, email__isnull=False)
 
     def active_guest_users(self):
         """Get queryset of active guest users"""
-        return self.filter(is_registered=False, is_active=True)
+        return self.filter(is_registered=False, is_active=True, email__isnull=True)
 
     def users_by_email(self, email: str):
         """
@@ -195,16 +237,6 @@ class CustomUserManager(BaseUserManager):
             queryset = queryset.filter(is_registered=True)
 
         return queryset.first()
-
-    def get_by_clerk_id(self, clerk_id: str):
-        """Get user by Clerk authentication ID"""
-        if not clerk_id:
-            return None
-
-        try:
-            return self.get(clerk_id=clerk_id, is_registered=True)
-        except self.model.DoesNotExist:
-            return None
 
     def get_by_invite_token(self, invite_token: str):
         """Get guest user by invitation token used"""

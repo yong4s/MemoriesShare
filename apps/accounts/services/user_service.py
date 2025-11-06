@@ -307,10 +307,6 @@ class UserService:
         """Get user by UUID"""
         return self.dal.get_by_uuid(user_uuid)
 
-    def get_user_by_clerk_id(self, clerk_id: str) -> CustomUser | None:
-        """Get user by Clerk authentication ID"""
-        return self.dal.get_by_clerk_id(clerk_id)
-
     def get_registered_users(self, limit: int = None) -> list[CustomUser]:
         """Get list of registered users"""
         return self.dal.get_registered_users(limit=limit)

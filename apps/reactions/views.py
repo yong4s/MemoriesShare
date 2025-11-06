@@ -1,3 +1,3 @@
-from django.shortcuts import render
+"""Reactions views module."""
 
 # Create your views here.

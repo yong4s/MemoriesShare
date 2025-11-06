@@ -17,12 +17,13 @@ from django.utils import timezone
 from apps.accounts.models.custom_user import CustomUser
 from apps.accounts.services.user_service import UserService
 from apps.events.dal.event_dal import EventDAL
-from apps.events.models.event import Event
-from apps.events.models.event_participant import EventParticipant
 from apps.events.exceptions import EventCreationError
 from apps.events.exceptions import EventNotFoundError
 from apps.events.exceptions import EventPermissionError
 from apps.events.exceptions import ParticipantError
+from apps.events.models.event import Event
+from apps.events.models.event_participant import EventParticipant
+from apps.shared.storage.optimized_s3_service import OptimizedS3Service
 
 
 class EventService:
@@ -31,6 +32,7 @@ class EventService:
     def __init__(self):
         self.dal = EventDAL()
         self.user_service = UserService()
+        self.s3_service = OptimizedS3Service()
 
     @transaction.atomic
     def create_event(self, validated_data: dict[str, Any], user: CustomUser) -> Event:
@@ -50,8 +52,19 @@ class EventService:
         try:
             # Generate UUID and prepare event data
             event_data = validated_data.copy()
-            event_data['event_uuid'] = uuid.uuid4()
+            event_uuid = uuid.uuid4()
+            event_data['event_uuid'] = event_uuid
             event_data['user'] = user
+
+            # Create S3 folder structure: users/{user_uuid}/events/{event_uuid}
+            s3_prefix = f'users/{user.user_uuid}/events/{event_uuid}'
+            event_data['s3_prefix'] = s3_prefix
+
+            # Create S3 folder
+            try:
+                self.s3_service.create_folder(s3_prefix)
+            except Exception as s3_error:
+                raise EventCreationError(f'Failed to create S3 folder: {s3_error!s}')
 
             # Create event through DAL
             event = self.dal.create_event(event_data)

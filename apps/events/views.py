@@ -6,22 +6,20 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.services.user_service import UserService
-from apps.events.serializers import (
-    BulkGuestInviteSerializer,
-    EventCreatedResponseSerializer,
-    EventCreateSerializer,
-    EventDeleteQuerySerializer,
-    EventDetailSerializer,
-    EventListQuerySerializer,
-    EventListSerializer,
-    EventParticipantDetailSerializer,
-    EventParticipantListSerializer,
-    EventParticipantRSVPUpdateSerializer,
-    EventUpdateQuerySerializer,
-    EventUpdateSerializer,
-    GuestInviteSerializer,
-    ParticipantListQuerySerializer,
-)
+from apps.events.serializers import BulkGuestInviteSerializer
+from apps.events.serializers import EventCreatedResponseSerializer
+from apps.events.serializers import EventCreateSerializer
+from apps.events.serializers import EventDeleteQuerySerializer
+from apps.events.serializers import EventDetailSerializer
+from apps.events.serializers import EventListQuerySerializer
+from apps.events.serializers import EventListSerializer
+from apps.events.serializers import EventParticipantDetailSerializer
+from apps.events.serializers import EventParticipantListSerializer
+from apps.events.serializers import EventParticipantRSVPUpdateSerializer
+from apps.events.serializers import EventUpdateQuerySerializer
+from apps.events.serializers import EventUpdateSerializer
+from apps.events.serializers import GuestInviteSerializer
+from apps.events.serializers import ParticipantListQuerySerializer
 from apps.events.services.event_service import EventService
 from apps.shared.base.base_api_view import BaseAPIView
 
@@ -210,7 +208,8 @@ class EventParticipantRSVPUpdateAPIView(BaseEventAPIView):
         logger.info(f'Updated RSVP for participant {participant.user.id} ' f'in event {event_uuid}')
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
-#invitation
+
+# invitation
 class EventGuestInviteAPIView(BaseEventAPIView):
     """Invite guest to event"""
 

@@ -136,6 +136,11 @@ class Event(BaseModel):
     # Event settings
     is_public = models.BooleanField(_('Public Event'), default=False)
 
+    # S3 storage
+    s3_prefix = models.CharField(
+        _('S3 Prefix'), max_length=500, blank=True, help_text=_('S3 folder path for event files')
+    )
+
     objects = EventManager()
 
     class Meta:

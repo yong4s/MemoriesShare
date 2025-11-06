@@ -6,6 +6,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import BotoCoreError
 from django.conf import settings
 
 from apps.shared.exceptions.exception import S3ServiceError
@@ -72,6 +73,8 @@ class S3Service:
             return f"Folder '{folder_name}' created successfully in bucket '{self.bucket}'"
         except ClientError as e:
             return f"Error: {e.response['Error']['Message']}"
+        except (BotoCoreError, NoCredentialsError) as e:
+            return f'AWS configuration error: {e!s}'
         except Exception as e:
             return f'An unexpected error occurred: {e!s}'
 
@@ -368,8 +371,10 @@ class S3Service:
             for key in keys:
                 urls[key] = self.generate_download_url(key, expiration)
             return urls
+        except (ClientError, BotoCoreError) as e:
+            raise S3ServiceError(f'AWS error generating bulk download URLs: {e}')
         except Exception as e:
-            raise S3ServiceError(f'Error generating bulk download URLs: {e}')
+            raise S3ServiceError(f'Unexpected error generating bulk download URLs: {e}')
 
     def process_uploaded_file(self, s3_key, file_type):
         """
@@ -394,8 +399,12 @@ class S3Service:
             else:
                 return self._process_document(file_content, s3_key)
 
+        except (ClientError, BotoCoreError) as e:
+            raise S3ServiceError(f'AWS error processing uploaded file: {e}')
+        except (ValueError, TypeError) as e:
+            raise S3ServiceError(f'File processing validation error: {e}')
         except Exception as e:
-            raise S3ServiceError(f'Error processing uploaded file: {e}')
+            raise S3ServiceError(f'Unexpected error processing uploaded file: {e}')
 
     def _download_file_content(self, s3_key):
         """Завантаження вмісту файлу з S3."""
@@ -434,8 +443,12 @@ class S3Service:
         except ImportError:
             # Якщо PIL не встановлено, повертаємо оригінал
             return {'original': s3_key, 'processed': False}
+        except (ClientError, BotoCoreError) as e:
+            raise S3ServiceError(f'AWS error processing image: {e}')
+        except (ValueError, OSError, IOError) as e:
+            raise S3ServiceError(f'Image processing error: {e}')
         except Exception as e:
-            raise S3ServiceError(f'Error processing image: {e}')
+            raise S3ServiceError(f'Unexpected error processing image: {e}')
 
     def _process_video(self, file_content, s3_key):
         """Обробка відео."""
@@ -452,5 +465,3 @@ def file_generate_name(original_file_name):
     extension = pathlib.Path(original_file_name).suffix
 
     return f'{uuid.uuid4().hex}{extension}'
-
-

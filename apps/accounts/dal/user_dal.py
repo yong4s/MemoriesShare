@@ -90,24 +90,6 @@ class UserDAL:
         except CustomUser.DoesNotExist:
             return None
 
-    def get_by_clerk_id(self, clerk_id: str) -> CustomUser | None:
-        """
-        Get user by Clerk authentication ID.
-
-        Args:
-            clerk_id: Clerk user identifier
-
-        Returns:
-            CustomUser instance or None
-        """
-        if not clerk_id:
-            return None
-
-        try:
-            return CustomUser.objects.select_related().get(clerk_id=clerk_id, is_registered=True)
-        except CustomUser.DoesNotExist:
-            return None
-
     def get_by_invite_token(self, invite_token: str) -> CustomUser | None:
         """
         Get guest user by invitation token.

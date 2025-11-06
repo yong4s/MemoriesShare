@@ -244,5 +244,3 @@ class FileUploadValidator:
             )
 
         return True
-
-

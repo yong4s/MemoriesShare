@@ -1,3 +1,3 @@
-from django.contrib import admin
+"""Reactions admin module."""
 
 # Register your models here.

@@ -82,6 +82,7 @@ class EventCategoryError(APIException):
 
 class EventBaseException(APIException):
     """Base exception for all event-related errors"""
+
     status_code = 400
     default_detail = 'Event operation failed.'
     default_code = 'event_error'
@@ -89,6 +90,7 @@ class EventBaseException(APIException):
 
 class ParticipantError(EventBaseException):
     """Raised when participant operation fails"""
+
     status_code = 400
     default_detail = 'Participant operation failed.'
     default_code = 'participant_error'
@@ -96,6 +98,7 @@ class ParticipantError(EventBaseException):
 
 class EventValidationError(EventBaseException):
     """Raised when event data validation fails"""
+
     status_code = 400
     default_detail = 'Event validation failed.'
     default_code = 'event_validation_error'
@@ -103,6 +106,7 @@ class EventValidationError(EventBaseException):
 
 class EventBusinessRuleError(EventBaseException):
     """Raised when business rule validation fails"""
+
     status_code = 400
     default_detail = 'Business rule validation failed.'
     default_code = 'event_business_rule_error'

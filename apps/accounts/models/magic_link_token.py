@@ -1,8 +1,8 @@
 import uuid
+from datetime import timedelta
 
 from django.db import models
 from django.utils import timezone
-from datetime import timedelta
 
 
 class MagicLinkModel(models.Model):
@@ -12,9 +12,11 @@ class MagicLinkModel(models.Model):
     expired_at = models.DateTimeField(default=lambda: timezone.now() + timedelta(minutes=15))
 
     def is_valid(self) -> bool:
-        return not self.is_used and self.expired_at < timezone.now()
+        is_still_fresh = not self.is_used
+        is_not_expired = self.expired_at > timezone.now()
 
-    def merk_used(self):
+        return is_still_fresh and is_not_expired
+
+    def mark_used(self):
         self.is_used = True
         self.save(update_fields=['is_used'])
-

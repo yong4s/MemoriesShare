@@ -82,8 +82,8 @@ class AlbumService:
             is_public=serializer.validated_data.get('is_public', False),
         )
 
-        # Генеруємо S3 prefix до збереження
-        album_folder_name = f'user-bucket-{user.pk}/{event.event_uuid}/album-{album.album_uuid}'
+        # Генеруємо S3 prefix до збереження: users/{user_uuid}/events/{event_uuid}/albums/{album_uuid}
+        album_folder_name = f'users/{user.user_uuid}/events/{event.event_uuid}/albums/{album.album_uuid}'
         album.album_s3_prefix = album_folder_name
 
         try:

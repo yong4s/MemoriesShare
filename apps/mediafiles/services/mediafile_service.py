@@ -2,6 +2,8 @@ import logging
 import mimetypes
 import uuid
 
+from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import PermissionDenied
@@ -120,8 +122,11 @@ class MediafileService:
                 'expires_in': 3600,
                 'storage_provider': 's3',
             }
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f'AWS error generating presigned URL: {e!s}')
+            raise S3ServiceError(f'AWS error generating upload URL: {e!s}')
         except Exception as e:
-            logger.error(f'Failed to generate presigned URL: {e!s}')
+            logger.exception('Unexpected error generating presigned URL')
             raise S3ServiceError(f'Failed to generate upload URL: {e!s}')
 
     def generate_download_url_by_uuid(self, event_uuid, user_id, s3_key, filename=None):
@@ -153,8 +158,11 @@ class MediafileService:
 
             logger.info(f'Generated download URL for file {s3_key}, user {user_id}')
             return {'download_url': presigned_url, 's3_key': s3_key, 'expires_in': 3600}
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f'AWS error generating download URL: {e!s}')
+            raise S3ServiceError(f'AWS error generating download URL: {e!s}')
         except Exception as e:
-            logger.error(f'Failed to generate download URL: {e!s}')
+            logger.exception('Unexpected error generating download URL')
             raise S3ServiceError(f'Failed to generate download URL: {e!s}')
 
     def generate_bulk_download_urls_by_uuid(self, event_uuid, user_id, s3_keys):
@@ -188,8 +196,11 @@ class MediafileService:
 
             logger.info(f'Generated bulk download URLs for {len(authorized_keys)} files, user {user_id}')
             return {'download_urls': urls, 'total_files': len(authorized_keys), 'expires_in': 3600}
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f'AWS error generating bulk download URLs: {e!s}')
+            raise S3ServiceError(f'AWS error generating bulk download URLs: {e!s}')
         except Exception as e:
-            logger.error(f'Failed to generate bulk download URLs: {e!s}')
+            logger.exception('Unexpected error generating bulk download URLs')
             raise S3ServiceError(f'Failed to generate bulk download URLs: {e!s}')
 
     def delete_file_by_uuid(self, event_uuid, user_id, s3_key):
@@ -375,7 +386,8 @@ class MediafileService:
             S3UploadException: При помилці завантаження
         """
         try:
-            s3_key = f"{album.album_s3_prefix}/{validated_data['S3_object_key']}"
+            # Структура: users/{user_uuid}/events/{event_uuid}/albums/{album_uuid}/mediafiles/{mediafile_uuid}
+            s3_key = f"{album.album_s3_prefix}/mediafiles/{validated_data['S3_object_key']}"
             logger.info(f'Uploading file to S3: {s3_key}')
 
             self.s3service.upload_file(file, validated_data['S3_bucket_name'], s3_key)

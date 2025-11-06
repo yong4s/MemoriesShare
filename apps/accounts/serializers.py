@@ -26,7 +26,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'is_staff': self.user.is_staff,
             'is_active': self.user.is_active,
             'display_name': self.user.display_name,
-            'is_anonymous_guest': self.user.is_anonymous_guest,
+            'is_guest': self.user.is_guest,
+            'is_registered': self.user.is_registered,
             'date_joined': self.user.date_joined.isoformat(),
         }
 

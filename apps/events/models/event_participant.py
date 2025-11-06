@@ -53,6 +53,14 @@ class EventParticipantQuerySet(models.QuerySet):
         """Get participations for specific user"""
         return self.filter(user=user)
 
+    def owners_emails(self):
+        """Get list of owner emails for notification sending."""
+        return list(self.owners().values_list('user__email', flat=True))
+
+    def active(self):
+        """Get active (non-canceled) participants."""
+        return self.exclude(rsvp_status=self.model.RsvpStatus.CANCELED)
+
 
 class EventParticipantManager(models.Manager):
     """Custom manager for event participants"""
@@ -215,9 +223,11 @@ class EventParticipant(BaseModel):
         super().clean()
         errors = {}
 
+        # Auto-clear guest fields for registered users
         if self.user and self.user.is_registered:
-            if self.guest_name:
-                errors['guest_name'] = _('Registered users should not have guest names')
+            self.guest_name = ''
+            self.guest_email = ''
+            self.guest_phone = ''
 
         if errors:
             raise ValidationError(errors)

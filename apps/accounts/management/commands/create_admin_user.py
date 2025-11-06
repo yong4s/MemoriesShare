@@ -3,8 +3,8 @@ from django.core.management import BaseCommand
 
 
 class Command(BaseCommand):
-    ADMIN_EMAIL = 'admin@mail.com'
-    ADMIN_PASSWORD = 'adminpassword'  # nosec  # noqa: S105
+    ADMIN_EMAIL = 'admin@gmail.com'
+    ADMIN_PASSWORD = '123456'  # nosec  # noqa: S105
     help = 'Check and create default development admin user'
 
     def handle(self, *args, **options):  # noqa: ARG002
@@ -16,6 +16,7 @@ class Command(BaseCommand):
                 'is_staff': True,
                 'is_active': True,
                 'is_superuser': True,
+                'is_registered': True,  # Critical: mark as registered user
             },
         )
         user.set_password(self.ADMIN_PASSWORD)

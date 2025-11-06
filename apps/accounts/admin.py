@@ -8,48 +8,54 @@ from .models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(BaseUserAdmin):
-    """Custom User Admin with Clerk integration support"""
+    """Custom User Admin for unified user types"""
 
-    # Поля для відображення в списку користувачів
-    list_display = ('pk', 'email', 'clerk_id', 'is_active', 'is_staff', 'date_joined', 'has_clerk_auth')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'date_joined')
-    search_fields = ('email', 'clerk_id', 'pk')
+    # Display fields in user list
+    list_display = ('pk', 'email', 'user_type', 'display_name', 'is_active', 'is_staff', 'date_joined')
+    list_filter = ('is_registered', 'is_active', 'is_staff', 'is_superuser', 'date_joined')
+    search_fields = ('email', 'guest_name', 'first_name', 'last_name', 'pk')
     ordering = ('-date_joined',)
 
-    # Поля для детального перегляду користувача
+    # Fields for user detail view
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
-        (_('Clerk Integration'), {'fields': ('clerk_id',)}),
+        (_('User Type'), {'fields': ('is_registered', 'guest_name')}),
+        (_('Personal Info'), {'fields': ('first_name', 'last_name', 'user_uuid')}),
+        (_('Guest Info'), {'fields': ('invite_token_used', 'original_guest_data')}),
         (
             _('Permissions'),
             {
                 'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
             },
         ),
-        (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
+        (_('Important dates'), {'fields': ('last_login', 'date_joined', 'created_at', 'updated_at')}),
     )
 
-    # Поля для створення нового користувача
+    # Fields for creating new user
     add_fieldsets = (
         (
             None,
             {
                 'classes': ('wide',),
-                'fields': ('email', 'password1', 'password2', 'clerk_id'),
+                'fields': ('email', 'password1', 'password2', 'is_registered', 'first_name', 'last_name', 'guest_name'),
             },
         ),
     )
 
-    # Readonly поля
-    readonly_fields = ('date_joined', 'last_login')
+    # Readonly fields
+    readonly_fields = ('date_joined', 'last_login', 'created_at', 'updated_at', 'user_uuid')
 
-    def has_clerk_auth(self, obj):
-        """Показує чи має користувач Clerk аутентифікацію"""
-        return bool(obj.clerk_id)
+    def user_type(self, obj):
+        """Display user type based on is_registered flag"""
+        if obj.is_registered:
+            return '🔐 Registered'
+        elif obj.email:
+            return '📧 Passwordless'
+        else:
+            return '👤 Guest'
 
-    has_clerk_auth.boolean = True
-    has_clerk_auth.short_description = 'Clerk Auth'
+    user_type.short_description = 'Type'
 
     def get_queryset(self, request):
-        """Оптимізований queryset"""
+        """Optimized queryset"""
         return super().get_queryset(request).select_related()

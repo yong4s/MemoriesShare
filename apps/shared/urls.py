@@ -1,4 +1,5 @@
-# apps/shared/urls.py
+"""Shared app URL configuration."""
+
 from django.urls import path
 
 from .views.auth_views import LoginView

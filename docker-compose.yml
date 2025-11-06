@@ -35,25 +35,4 @@ services:
     ports:
       - "8000:8000"
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app:delegated
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    depends_on:
-      - backend
 
-#  worker:
-#    <<: *base-backend
-#    build: .
-#    command: celery -A apps worker -l INFO -Q default
-#
-#  beat:
-#    <<: *base-backend
-#    build: .
-#    command: celery -A apps beat -l INFO -s /var/run/celerybeat-schedule --pidfile /var/run/celerybeat.pid

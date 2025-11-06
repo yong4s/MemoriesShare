@@ -10,6 +10,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.accounts.managers.custom_user_manager import CustomUserManager
 from apps.shared.base.models import BaseModel
 
 
@@ -27,7 +28,6 @@ class CustomUser(AbstractUser, BaseModel):
         null=True,  # Critical: allows guest users without email
         blank=True,
         help_text=_('Required for registered users, optional for guests'),
-        db_collation='case_insensitive',  # Case-insensitive email matching
     )
 
     # Core differentiator between user types
@@ -45,17 +45,6 @@ class CustomUser(AbstractUser, BaseModel):
         editable=False,
         db_index=True,
         help_text=_('UUID for S3 storage structure and external references'),
-    )
-
-    # Clerk integration for external authentication
-    clerk_id = models.CharField(
-        _('Clerk ID'),
-        max_length=255,
-        unique=True,
-        null=True,
-        blank=True,
-        help_text=_('Clerk user identifier for authentication'),
-        db_index=True,
     )
 
     # Guest-specific fields (when is_registered=False)
@@ -82,10 +71,8 @@ class CustomUser(AbstractUser, BaseModel):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS: ClassVar[list[str]] = []
 
-    # Import and set the custom manager
-    from apps.accounts.managers import UserManager
-
-    objects = UserManager()
+    # Set the custom manager
+    objects = CustomUserManager()
 
     class Meta:
         db_table = 'accounts_customuser'
@@ -95,7 +82,6 @@ class CustomUser(AbstractUser, BaseModel):
             models.Index(fields=['email', 'is_registered']),
             models.Index(fields=['is_registered', 'is_active']),
             models.Index(fields=['user_uuid']),
-            models.Index(fields=['clerk_id']),
             models.Index(fields=['invite_token_used']),
         ]
         constraints = [
@@ -111,28 +97,29 @@ class CustomUser(AbstractUser, BaseModel):
         super().clean()
         errors = {}
 
-        # Registered users MUST have email
-        if self.is_registered and not self.email:
-            errors['email'] = _('Email is required for registered users')
-
-        # Guests cannot have passwords (security constraint)
-        if not self.is_registered and self.has_usable_password():
-            errors['password'] = _('Guest users cannot have passwords')
-
-        # Registered users must have usable passwords (unless using external auth)
-        if self.is_registered and not self.has_usable_password() and not self.clerk_id:
-            errors['password'] = _('Registered users must have a password or external authentication')
-
-        # Guest users should have guest_name for display
-        if not self.is_registered and not self.guest_name:
-            errors['guest_name'] = _('Guest users should have a display name')
-
-        # Email uniqueness for registered users only
-        if self.is_registered and self.email:
-            existing_user = CustomUser.objects.filter(email=self.email, is_registered=True).exclude(pk=self.pk).first()
-
+        # All users with email must have unique email
+        if self.email:
+            existing_user = CustomUser.objects.filter(email=self.email).exclude(pk=self.pk).first()
             if existing_user:
-                errors['email'] = _('A registered user with this email already exists')
+                errors['email'] = _('A user with this email already exists')
+
+        # NEW LOGIC: is_registered determines password requirements
+        if self.is_registered:
+            # is_registered=True: Traditional users with password
+            if not self.email:
+                errors['email'] = _('Email is required for registered users')
+            if not self.has_usable_password():
+                errors['password'] = _('Password is required for registered users')
+            # Clear guest fields for registered users
+            if self.guest_name:
+                self.guest_name = ''
+        else:
+            # is_registered=False: Passwordless users OR guests
+            if self.email and self.has_usable_password():
+                errors['password'] = _('Passwordless users cannot have passwords')
+            # If no email, must be guest with guest_name
+            if not self.email and not self.guest_name:
+                errors['guest_name'] = _('Guest users must have a display name')
 
         if errors:
             raise ValidationError(errors)

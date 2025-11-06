@@ -187,8 +187,11 @@ class JWTService:
         except jwt.InvalidTokenError as e:
             logger.warning(f'Invalid {token_type} token: {e!s}')
             return None
+        except (AttributeError, KeyError) as e:
+            logger.error(f'Token payload error for {token_type} token: {e!s}')
+            return None
         except Exception as e:
-            logger.error(f'Error verifying {token_type} token: {e!s}')
+            logger.exception(f'Unexpected error verifying {token_type} token')
             return None
 
     def refresh_access_token(self, refresh_token: str) -> dict[str, Any] | None:
@@ -260,8 +263,14 @@ class JWTService:
             logger.info(f'Blacklisted {token_type} token {jti} for user {user_id}')
             return True
 
+        except User.DoesNotExist:
+            logger.warning('User not found for token blacklisting')
+            return False
+        except (ValueError, KeyError, AttributeError) as e:
+            logger.error(f'Invalid token data for blacklisting: {e!s}')
+            return False
         except Exception as e:
-            logger.error(f'Error blacklisting token: {e!s}')
+            logger.exception('Unexpected error blacklisting token')
             return False
 
     def logout_user(self, user: User, session_id: int = None) -> bool:
@@ -291,8 +300,11 @@ class JWTService:
             logger.info(f'Logged out user {user.id} ({sessions.count()} sessions)')
             return True
 
+        except AttributeError as e:
+            logger.error(f'Session attribute error during logout for user {user.id}: {e!s}')
+            return False
         except Exception as e:
-            logger.error(f'Error during logout for user {user.id}: {e!s}')
+            logger.exception(f'Unexpected error during logout for user {user.id}')
             return False
 
     def blacklist_refresh_token_by_jti(self, jti: str, reason: str = 'logout') -> bool:
@@ -346,8 +358,11 @@ class JWTService:
 
             logger.info(f'Cleaned up {blacklisted_count} expired tokens and {sessions_count} sessions')
             return {'blacklisted_tokens': blacklisted_count, 'sessions': sessions_count}
+        except AttributeError as e:
+            logger.error(f'Model attribute error during cleanup: {e!s}')
+            return {'blacklisted_tokens': 0, 'sessions': 0}
         except Exception as e:
-            logger.error(f'Error during cleanup: {e!s}')
+            logger.exception('Unexpected error during cleanup')
             return {'blacklisted_tokens': 0, 'sessions': 0}
 
     def get_user_sessions(self, user: User) -> list:
@@ -380,5 +395,7 @@ class JWTService:
                 payload['is_blacklisted'] = BlacklistedToken.is_blacklisted(jti)
 
             return payload
+        except (jwt.InvalidTokenError, ValueError, KeyError) as e:
+            return {'error': f'Token decode error: {e!s}'}
         except Exception as e:
-            return {'error': str(e)}
+            return {'error': f'Unexpected error: {e!s}'}

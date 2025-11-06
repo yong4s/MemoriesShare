@@ -499,9 +499,13 @@ class S3FolderManager:
             logger.info(f'Created all folders for event {event_uuid}')
             return True
 
-        except Exception as e:
-            error_msg = f'Error creating event folders for {event_uuid}: {e}'
+        except (ClientError, BotoCoreError) as e:
+            error_msg = f'AWS error creating event folders for {event_uuid}: {e}'
             logger.error(error_msg)
+            raise S3ServiceError(error_msg)
+        except Exception as e:
+            error_msg = f'Unexpected error creating event folders for {event_uuid}: {e}'
+            logger.exception(error_msg)
             raise S3ServiceError(error_msg)
 
     def delete_folder(self, folder_path: str) -> int:
@@ -636,9 +640,13 @@ class OptimizedS3Service:
             logger.info(f'Generated {len(urls)} bulk download URLs')
             return urls
 
-        except Exception as e:
-            error_msg = f'Error generating bulk download URLs: {e}'
+        except (ClientError, BotoCoreError) as e:
+            error_msg = f'AWS error generating bulk download URLs: {e}'
             logger.error(error_msg)
+            raise S3ServiceError(error_msg)
+        except Exception as e:
+            error_msg = f'Unexpected error generating bulk download URLs: {e}'
+            logger.exception(error_msg)
             raise S3ServiceError(error_msg)
 
     # === OBJECT OPERATIONS ===

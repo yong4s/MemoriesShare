@@ -103,12 +103,17 @@ class InviteTokenMiddleware:
                     # Додаємо інформацію про подію до запиту
                     request.event = invite.event
 
-            except Exception as e:
+            except (AttributeError, ValueError, KeyError) as e:
                 # Логуємо помилку але не ламаємо запит
                 import logging
 
                 logger = logging.getLogger(__name__)
                 logger.warning(f'Помилка аутентифікації через токен: {e}')
+            except Exception as e:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.exception('Unexpected authentication error')
 
         response = self.get_response(request)
         return response
@@ -210,8 +215,14 @@ def get_user_from_invite_token(token: str):
         invite = EventInvite.objects.get_valid_invite(token)
         if invite and invite.guest_user:
             return invite.guest_user
-    except Exception:
+    except (AttributeError, ValueError):
+        # Invalid token format or missing attributes
         pass
+    except Exception:
+        # Log unexpected errors but don't expose them
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f'Unexpected error getting user from invite token: {token[:8]}...')
     return None
 
 
@@ -243,11 +254,17 @@ def create_guest_from_invite(token: str, guest_name: str = None):
 
         return user, invite
 
-    except Exception as e:
+    except (AttributeError, ValueError) as e:
         import logging
 
         logger = logging.getLogger(__name__)
-        logger.error(f'Помилка створення гостя з запрошення: {e}')
+        logger.error(f'Помилка валідації даних запрошення: {e}')
+        return None, None
+    except Exception:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.exception('Unexpected error creating guest from invite')
         return None, None
 
 
@@ -277,5 +294,10 @@ def validate_invite_token(token: str):
             'expires_at': invite.expires_at.isoformat() if invite.expires_at else None,
         }
 
-    except Exception as e:
+    except (AttributeError, ValueError, KeyError) as e:
         return {'valid': False, 'error': f'Помилка перевірки токена: {e!s}', 'code': 'validation_error'}
+    except Exception:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception('Unexpected error during invite token validation')
+        return {'valid': False, 'error': 'Внутрішня помилка сервера', 'code': 'server_error'}

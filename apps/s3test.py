@@ -8,7 +8,6 @@
 import os
 
 import requests
-from django.conf import settings
 
 from apps.shared.storage.s3_utils import S3Service
 
@@ -39,7 +38,12 @@ def demonstrate_presigned_url_usage():
 
         # Завантаження файлу через presigned URL
         test_content = 'Це тестовий файл, завантажений через presigned URL!'
-        response = requests.put(upload_url, data=test_content, headers={'Content-Type': 'text/plain'})
+        response = requests.put(
+            upload_url,
+            data=test_content,
+            headers={'Content-Type': 'text/plain'},
+            timeout=30
+        )
 
         if response.status_code == 200:
             print('✅ Файл успішно завантажено!')
@@ -59,7 +63,7 @@ def demonstrate_presigned_url_usage():
         print(f'Download URL: {download_url}')
 
         # Завантаження файлу через presigned URL
-        response = requests.get(download_url)
+        response = requests.get(download_url, timeout=30)
 
         if response.status_code == 200:
             print(f'✅ Файл успішно завантажено! Розмір: {len(response.content)} байт')
@@ -88,11 +92,13 @@ def demonstrate_presigned_url_usage():
     print('\n=== Приклад 4: Видалення файлу ===')
 
     try:
-        delete_url = s3_service.generate_delete_url(upload_key, expiration=300)  # 5 хвилин
+        delete_url = s3_service.generate_delete_url(
+            upload_key, expiration=300
+        )  # 5 хвилин
         print(f'Delete URL: {delete_url}')
 
         # Видалення файлу через presigned URL
-        response = requests.delete(delete_url)
+        response = requests.delete(delete_url, timeout=30)
 
         if response.status_code == 204:
             print('✅ Файл успішно видалено!')
@@ -126,8 +132,6 @@ def demonstrate_security_features():
     Демонстрація безпечних особливостей presigned URL.
     """
     print('\n=== Безпечні особливості Presigned URL ===')
-
-    s3_service = S3Service()
 
     # 1. Обмежений час життя
     print('1. Обмежений час життя:')

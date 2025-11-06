@@ -81,8 +81,18 @@ class RegisterView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
+        except ValidationError as e:
+            logger.warning(f'Validation error during registration: {e}')
+            return Response(
+                {'success': False, 'error': 'Invalid input data'}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except IntegrityError as e:
+            logger.warning(f'User already exists: {e}')
+            return Response(
+                {'success': False, 'error': 'User with this email already exists'}, status=status.HTTP_409_CONFLICT
+            )
         except Exception as e:
-            logger.error(f'Registration error: {e!s}')
+            logger.exception('Unexpected error during registration')
             return Response(
                 {'success': False, 'error': 'Registration failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -143,8 +153,11 @@ class LoginView(APIView):
                 }
             )
 
+        except AttributeError as e:
+            logger.error(f'User attribute error during login: {e}')
+            return Response({'success': False, 'error': 'Invalid user data'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f'Login error: {e!s}')
+            logger.exception('Unexpected error during login')
             return Response({'success': False, 'error': 'Login failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_client_ip(self, request):
@@ -184,8 +197,13 @@ class RefreshTokenView(APIView):
 
             return Response({'success': True, 'tokens': new_tokens})
 
+        except (AttributeError, ValueError) as e:
+            logger.error(f'Token attribute error: {e!s}')
+            return Response(
+                {'success': False, 'error': 'Invalid token data'}, status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
-            logger.error(f'Token refresh error: {e!s}')
+            logger.exception('Unexpected error during token refresh')
             return Response(
                 {'success': False, 'error': 'Token refresh failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -224,8 +242,11 @@ class LogoutView(APIView):
             logger.info(f'User logged out: {request.user.email}')
             return Response({'success': True, 'message': 'Logout successful'})
 
+        except AttributeError as e:
+            logger.error(f'User attribute error during logout: {e!s}')
+            return Response({'success': False, 'error': 'Invalid user data'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f'Logout error: {e!s}')
+            logger.exception('Unexpected error during logout')
             return Response({'success': False, 'error': 'Logout failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -271,8 +292,13 @@ class ProfileView(APIView):
                 }
             )
 
+        except AttributeError as e:
+            logger.error(f'User attribute error getting profile: {e!s}')
+            return Response(
+                {'success': False, 'error': 'Invalid user data'}, status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
-            logger.error(f'Profile error: {e!s}')
+            logger.exception('Unexpected error getting profile')
             return Response(
                 {'success': False, 'error': 'Failed to get profile'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -303,8 +329,11 @@ class LogoutAllSessionsView(APIView):
             logger.info(f'User logged out from all sessions: {request.user.email}')
             return Response({'success': True, 'message': 'Logged out from all sessions'})
 
+        except AttributeError as e:
+            logger.error(f'User attribute error during logout all: {e!s}')
+            return Response({'success': False, 'error': 'Invalid user data'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f'Logout all error: {e!s}')
+            logger.exception('Unexpected error during logout all')
             return Response({'success': False, 'error': 'Logout failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -333,8 +362,13 @@ class ValidateTokenView(APIView):
             else:
                 return Response({'success': True, 'valid': False, 'error': 'Invalid or expired token'})
 
+        except (ValueError, KeyError) as e:
+            logger.error(f'Token format error: {e!s}')
+            return Response(
+                {'success': False, 'error': 'Invalid token format'}, status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
-            logger.error(f'Token validation error: {e!s}')
+            logger.exception('Unexpected error during token validation')
             return Response(
                 {'success': False, 'error': 'Validation failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

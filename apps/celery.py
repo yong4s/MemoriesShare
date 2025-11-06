@@ -1,3 +1,5 @@
+"""Celery configuration for the media_flow project."""
+
 import os
 
 from celery import Celery

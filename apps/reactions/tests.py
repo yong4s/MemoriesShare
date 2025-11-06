@@ -1,3 +1,3 @@
-from django.test import TestCase
+"""Reactions tests module."""
 
 # Create your tests here.
