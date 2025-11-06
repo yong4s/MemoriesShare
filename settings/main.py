@@ -18,6 +18,9 @@ INSTALLED_APPS += [
     'apps.mediafiles',
     'apps.reactions',
     
+    # Celery and async tasks
+    'django_celery_beat',
+    
     # Django AllAuth
     'django.contrib.sites',
     'allauth',
@@ -67,17 +70,7 @@ if 'test' in sys.argv:  # noqa: SIM108
 else:
     ENVIRONMENT = env('ENVIRONMENT')
 
-# Django Cache Configuration (Database-based)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-        'LOCATION': 'django_cache_table',
-        'TIMEOUT': 3600,  # 1 hour default timeout
-        'OPTIONS': {
-            'MAX_ENTRIES': 10000,
-        }
-    }
-}
+# Redis Cache Configuration (will be overridden below after Celery config)
 
 # Testing environment optimizations  
 if ENVIRONMENT == TESTING_ENVIRONMENT:
@@ -250,3 +243,52 @@ SIMPLE_JWT = {
 
 # Legacy JWT service key (for backward compatibility)
 SIMPLE_JWT_SECRET_KEY = env.str('SIMPLE_JWT_SECRET_KEY', default='dev-jwt-secret-key-change-in-production')
+
+# Celery Configuration
+CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default='redis://localhost:6379/1')
+
+# Celery security and performance settings
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Celery task execution settings
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_IGNORE_RESULT = False
+CELERY_TASK_STORE_EAGER_RESULT = True
+
+# Celery worker settings
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+CELERY_WORKER_DISABLE_RATE_LIMITS = True
+
+# Celery task time limits (in seconds)
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_TIME_LIMIT = 600  # 10 minutes
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+
+# Celery beat scheduler settings
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Celery result backend settings
+CELERY_RESULT_EXPIRES = 3600  # 1 hour
+CELERY_RESULT_PERSISTENT = True
+
+# Redis Cache Configuration (separate from Celery)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': env.str('REDIS_URL', default='redis://localhost:6379/2'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'TIMEOUT': 3600,  # 1 hour default timeout
+        'KEY_PREFIX': 'media_flow',
+        'VERSION': 1,
+    }
+}
