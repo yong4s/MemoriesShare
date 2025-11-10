@@ -250,16 +250,6 @@ class EventListQuerySerializer(serializers.Serializer):
     search = serializers.CharField(required=False, max_length=255)
 
 
-class EventUpdateQuerySerializer(serializers.Serializer):
-    """Query parameters for event update"""
-
-    event_uuid = serializers.UUIDField(required=True)
-
-
-class EventDeleteQuerySerializer(serializers.Serializer):
-    """Query parameters for event delete"""
-
-    event_uuid = serializers.UUIDField(required=True)
 
 
 class ParticipantListQuerySerializer(serializers.Serializer):

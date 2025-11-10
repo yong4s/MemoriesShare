@@ -9,14 +9,12 @@ from apps.accounts.services.user_service import UserService
 from apps.events.serializers import BulkGuestInviteSerializer
 from apps.events.serializers import EventCreatedResponseSerializer
 from apps.events.serializers import EventCreateSerializer
-from apps.events.serializers import EventDeleteQuerySerializer
 from apps.events.serializers import EventDetailSerializer
 from apps.events.serializers import EventListQuerySerializer
 from apps.events.serializers import EventListSerializer
 from apps.events.serializers import EventParticipantDetailSerializer
 from apps.events.serializers import EventParticipantListSerializer
 from apps.events.serializers import EventParticipantRSVPUpdateSerializer
-from apps.events.serializers import EventUpdateQuerySerializer
 from apps.events.serializers import EventUpdateSerializer
 from apps.events.serializers import GuestInviteSerializer
 from apps.events.serializers import ParticipantListQuerySerializer
@@ -93,16 +91,13 @@ class EventUpdateAPIView(BaseEventAPIView):
 
     permission_classes = [IsAuthenticated]
 
-    def put(self, request):
+    def put(self, request, event_uuid):
         """Update existing event"""
-        uuid_serializer = EventUpdateQuerySerializer(data=request.data)
-        uuid_serializer.is_valid(raise_exception=True)
-
         data_serializer = EventUpdateSerializer(data=request.data)
         data_serializer.is_valid(raise_exception=True)
 
         event = self.get_event_service().update_event(
-            event_uuid=str(uuid_serializer.validated_data['event_uuid']),
+            event_uuid=str(event_uuid),
             validated_data=data_serializer.validated_data,
             user_id=request.user.id,
         )
@@ -118,16 +113,13 @@ class EventDeleteAPIView(BaseEventAPIView):
 
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request):
+    def delete(self, request, event_uuid):
         """Delete existing event"""
-        serializer = EventDeleteQuerySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
         self.get_event_service().delete_event(
-            event_uuid=str(serializer.validated_data['event_uuid']), user_id=request.user.id
+            event_uuid=str(event_uuid), user_id=request.user.id
         )
 
-        logger.info(f"Deleted event {serializer.validated_data['event_uuid']} " f"by user {request.user.id}")
+        logger.info(f"Deleted event {event_uuid} by user {request.user.id}")
         return Response({'message': 'Event deleted successfully'}, status=status.HTTP_200_OK)
 
 
