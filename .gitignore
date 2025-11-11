@@ -128,3 +128,5 @@ install_packages.sh
 
 # Frontend files
 frontend/
+/docs/
+/apps/shared/templates/
