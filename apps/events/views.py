@@ -6,32 +6,35 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.services.user_service import UserService
-from apps.events.serializers import BulkGuestInviteSerializer
-from apps.events.serializers import EventCreatedResponseSerializer
-from apps.events.serializers import EventCreateSerializer
-from apps.events.serializers import EventDetailSerializer
-from apps.events.serializers import EventListQuerySerializer
-from apps.events.serializers import EventListSerializer
-from apps.events.serializers import EventParticipantDetailSerializer
-from apps.events.serializers import EventParticipantListSerializer
-from apps.events.serializers import EventParticipantRSVPUpdateSerializer
-from apps.events.serializers import EventUpdateSerializer
-from apps.events.serializers import GuestInviteSerializer
-from apps.events.serializers import ParticipantListQuerySerializer
+from apps.events.serializers import (
+    BulkGuestInviteSerializer,
+    EventCreateSerializer,
+    EventCreatedResponseSerializer,
+    EventDetailSerializer,
+    EventListQuerySerializer,
+    EventListSerializer,
+    EventParticipantDetailSerializer,
+    EventParticipantListSerializer,
+    EventParticipantRSVPUpdateSerializer,
+    EventUpdateSerializer,
+    GuestInviteSerializer,
+    ParticipantListQuerySerializer,
+)
 from apps.events.services.event_service import EventService
-from apps.shared.base.base_api_view import BaseAPIView
+from apps.shared.base.service_aware_view import ServiceAwareAPIView, EventServiceMixin
+
 
 logger = logging.getLogger(__name__)
 
 
-class BaseEventAPIView(BaseAPIView):
-    """Base view for event operations"""
-
-    def get_event_service(self):
-        return EventService()
-
-    def get_user_service(self):
-        return UserService()
+class BaseEventAPIView(ServiceAwareAPIView, EventServiceMixin):
+    """
+    Base view for event operations using service factory pattern.
+    
+    This view demonstrates the new architecture with dependency injection
+    and service lifecycle management through the factory pattern.
+    """
+    pass
 
 
 class EventCreateAPIView(BaseEventAPIView):

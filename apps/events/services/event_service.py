@@ -7,32 +7,37 @@ Handles all event-related business operations while working with the
 
 import uuid
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 from django.db import transaction
-from django.utils import timezone
 
 from apps.accounts.models.custom_user import CustomUser
 from apps.accounts.services.user_service import UserService
 from apps.events.dal.event_dal import EventDAL
 from apps.events.exceptions import EventCreationError
 from apps.events.exceptions import EventNotFoundError
-from apps.events.exceptions import EventPermissionError
 from apps.events.exceptions import ParticipantError
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
-from apps.shared.storage.optimized_s3_service import OptimizedS3Service
+from apps.events.services.permission_service import EventPermissionService
+from apps.shared.interfaces.service_interfaces import IEventService, IS3Service
 
 
-class EventService:
+class EventService(IEventService):
     """Service for event business logic operations"""
 
-    def __init__(self):
-        self.dal = EventDAL()
+    def __init__(self, dal: EventDAL = None, permission_service: EventPermissionService = None, s3_service: IS3Service = None):
+        self.dal = dal or EventDAL()
         self.user_service = UserService()
-        self.s3_service = OptimizedS3Service()
+        self._s3_service = s3_service
+        self.permission_service = permission_service or EventPermissionService(dal=self.dal)
+
+    @property
+    def s3_service(self) -> IS3Service:
+        """Lazy initialization of S3 service using factory pattern"""
+        if self._s3_service is None:
+            from apps.shared.services.service_factory import get_service, ServiceNames
+            self._s3_service = get_service(ServiceNames.S3_SERVICE)
+        return self._s3_service
 
     @transaction.atomic
     def create_event(self, validated_data: dict[str, Any], user: CustomUser) -> Event:
@@ -96,8 +101,7 @@ class EventService:
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
-        if not self.can_user_access_event(event, user_id):
-            raise EventPermissionError("You don't have access to this event")
+        self.permission_service.validate_guest_or_owner_access(event, user_id)
 
         return event
 
@@ -135,8 +139,7 @@ class EventService:
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
-        if not self.can_user_modify_event(event, user_id):
-            raise EventPermissionError('You cannot modify this event')
+        self.permission_service.validate_event_modification(event, user_id)
 
         return self.dal.update_event(event, validated_data)
 
@@ -160,8 +163,7 @@ class EventService:
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
-        if not self.is_event_owner(event, user_id):
-            raise EventPermissionError('Only event owner can delete the event')
+        self.permission_service.validate_owner_access(event, user_id)
 
         return self.dal.delete_event(event)
 
@@ -192,8 +194,7 @@ class EventService:
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
-        if not self.can_user_access_event(event, requesting_user_id):
-            raise EventPermissionError("You don't have access to this event")
+        self.permission_service.validate_guest_or_owner_access(event, requesting_user_id)
 
         return self.dal.get_event_participants(event, role_filter, rsvp_filter)
 
@@ -234,8 +235,7 @@ class EventService:
 
         # Permission check (skip for invite tokens)
         if requesting_user_id and not invite_token:
-            if not self.can_user_modify_event(event, requesting_user_id):
-                raise EventPermissionError('You cannot add participants to this event')
+            self.permission_service.validate_participant_management(event, requesting_user_id, 'add')
 
         # Check if user is already a participant
         if self.dal.is_user_participant(event, user):
@@ -277,11 +277,10 @@ class EventService:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
         # Permission check
-        if not self.can_user_modify_event(event, requesting_user_id):
-            raise EventPermissionError('You cannot remove participants from this event')
+        self.permission_service.validate_participant_management(event, requesting_user_id, 'remove')
 
         # Cannot remove event owner
-        if self.is_event_owner(event, user.id):
+        if self.permission_service.is_event_owner(event, user.id):
             raise ParticipantError('Cannot remove event owner from event')
 
         participation = self.dal.get_user_participation(event, user)
@@ -319,9 +318,8 @@ class EventService:
         if not participation:
             raise ParticipantError('User is not a participant in this event')
 
-        # Users can update their own RSVP, or event owner can update any RSVP
-        if requesting_user_id != user.id and not self.is_event_owner(event, requesting_user_id):
-            raise EventPermissionError('You can only update your own RSVP status')
+        # Validate RSVP update permissions
+        self.permission_service.validate_rsvp_update(event, user.id, requesting_user_id)
 
         return self.dal.update_participant_rsvp(participation, rsvp_status)
 
@@ -350,8 +348,7 @@ class EventService:
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
-        if not self.can_user_modify_event(event, requesting_user_id):
-            raise EventPermissionError('You cannot invite guests to this event')
+        self.permission_service.validate_participant_management(event, requesting_user_id, 'invite')
 
         # Create guest user
         guest_user = user_service.create_guest_user(guest_name=guest_name, guest_email=guest_email)
@@ -369,29 +366,12 @@ class EventService:
         return guest_user, participation
 
     # =============================================================================
-    # PERMISSION HELPERS
+    # DELEGATION TO PERMISSION SERVICE
     # =============================================================================
 
-    def can_user_access_event(self, event: Event, user_id: int) -> bool:
-        """Check if user can access event"""
-        return self.is_event_owner(event, user_id) or self.dal.is_user_participant_by_id(event, user_id)
-
-    def can_user_modify_event(self, event: Event, user_id: int) -> bool:
-        """Check if user can modify event"""
-        if self.is_event_owner(event, user_id):
-            return True
-
-        # Check if user is moderator
-        participation = self.dal.get_user_participation_by_id(event, user_id)
-        return participation and participation.role == 'MODERATOR'
-
-    def is_event_owner(self, event: Event, user_id: int) -> bool:
-        """Check if user is event owner"""
-        return event.user_id == user_id
-
     def get_user_participation_in_event(self, event: Event, user: CustomUser) -> EventParticipant | None:
-        """Get user's participation in event"""
-        return self.dal.get_user_participation(event, user)
+        """Get user's participation in event (delegated to permission service)"""
+        return self.permission_service.get_user_participation_in_event(event, user)
 
     # =============================================================================
     # PRIVATE HELPERS

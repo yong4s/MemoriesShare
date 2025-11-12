@@ -4,9 +4,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.exceptions import InvalidUserIdError
-from apps.events.services.permission_service import EventPermissionService
 from apps.shared.exceptions.exception import S3ServiceError
-from apps.shared.storage.optimized_s3_service import OptimizedS3Service
+from apps.shared.interfaces.permission_interface import IPermissionValidator
+from apps.shared.interfaces.service_interfaces import IAlbumService, IS3Service
+from apps.shared.services.permission_factory import get_permission_validator
 from apps.shared.utils.general import get_user_by_id
 
 from ..dal import AlbumDAL
@@ -15,31 +16,41 @@ from ..models import Album
 logger = logging.getLogger(__name__)
 
 
-class AlbumService:
+class AlbumService(IAlbumService):
     """
     Сервісний шар для роботи з альбомами.
     Забезпечує бізнес-логіку для CRUD операцій з альбомами та інтеграцію з S3.
     """
 
-    def __init__(self, s3service=None, dal=None, permission_service=None):
+    def __init__(self, s3service: IS3Service = None, dal=None, permission_service=None):
         """
         Ініціалізація сервісу з опціональними залежностями.
 
         Args:
-            s3service: S3 сервіс для роботи з файлами
+            s3service: S3 сервіс для роботи з файлами (реалізація IS3Service)
             dal: Data Access Layer для альбомів
-            permission_service: Сервіс для перевірки дозволів
+            permission_service: IPermissionValidator для перевірки дозволів
         """
-        self.s3service = s3service or OptimizedS3Service()
+        # S3Service буде ін'єктований через service factory
+        self._s3service = s3service
         self.dal = dal or AlbumDAL()
-        # Використовуємо lazy import для уникнення циклічних залежностей
+        # Використовуємо інтерфейс для розірвання циклічних залежностей
         self._permission_service = permission_service
 
     @property
-    def permission_service(self):
-        """Lazy initialization EventPermissionService"""
+    def s3service(self) -> IS3Service:
+        """Lazy initialization of S3 service using factory pattern"""
+        if self._s3service is None:
+            from apps.shared.services.service_factory import get_service, ServiceNames
+            self._s3service = get_service(ServiceNames.S3_SERVICE)
+        return self._s3service
+
+    @property
+    def permission_service(self) -> IPermissionValidator:
+        """Lazy initialization of permission validator using factory pattern"""
         if self._permission_service is None:
-            self._permission_service = EventPermissionService()
+            # Використовуємо фабрику для створення підходящого валідатора
+            self._permission_service = get_permission_validator(context="album")
         return self._permission_service
 
     def create_album(self, serializer, event, user_id):
@@ -69,8 +80,10 @@ class AlbumService:
             logger.error(f'Invalid user ID provided for album creation: {user_id}')
             raise
 
-        # Перевіряємо чи користувач є власником події
-        if event.user_id != user_id:
+        # Перевіряємо чи користувач є власником події через permission service
+        try:
+            self.permission_service.validate_owner_access(event, user_id)
+        except PermissionDenied:
             logger.warning(f'User {user_id} attempted to create album for event {event.id} without ownership')
             raise PermissionDenied('Only event owner can create albums.')
 
@@ -209,7 +222,7 @@ class AlbumService:
         Returns:
             bool: True якщо користувач має доступ
         """
-        # Використовуємо EventPermissionService для перевірки доступу
+        # Використовуємо permission service через інтерфейс для перевірки доступу
         try:
             from apps.events.models import Event
 
