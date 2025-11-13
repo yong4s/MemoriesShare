@@ -21,8 +21,8 @@ class EventTestMixin:
         super().setUp()
         self.user = UserFactory()
         self.other_user = UserFactory()
-        self.event = EventFactory(user=self.user)
-        self.other_event = EventFactory(user=self.other_user)
+        self.event = EventFactory()
+        self.other_event = EventFactory()
 
     def create_api_key(self):
         """Створює API ключ для тестування"""

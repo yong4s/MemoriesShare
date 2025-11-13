@@ -16,12 +16,9 @@ class EventParticipantValidator:
         errors = {}
 
         if role == EventParticipant.Role.OWNER:
-            if event.participants_through.filter(role=EventParticipant.Role.OWNER).exists():
+            if event.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).exists():
                 errors['role'] = _('Event can only have one owner')
-        if event.max_guests:
-            current_count = event.participants_through.count()
-            if current_count >= event.max_guests:
-                errors['event'] = _('Event has reached maximum capacity')
+        # Check participant count if max_guests is set (removed max_guests field check since it was removed from model)
 
         if user.is_registered and role == EventParticipant.Role.GUEST:
             errors['role'] = _('Registered users cannot be added as guests')
@@ -29,7 +26,7 @@ class EventParticipantValidator:
         if user.is_guest and not user.guest_name:
             errors['guest_name'] = _('Guest users must have a display name')
 
-        if event.participants_through.filter(user=user).exists():
+        if event.eventparticipant_set.filter(user=user).exists():
             errors['user'] = _('User is already a participant in this event')
 
         from django.utils import timezone
@@ -60,7 +57,7 @@ class EventParticipantValidator:
         # Cannot change to owner if owner already exists
         if new_role == EventParticipant.Role.OWNER:
             if (
-                participant.event.participants_through.filter(role=EventParticipant.Role.OWNER)
+                participant.event.eventparticipant_set.filter(role=EventParticipant.Role.OWNER)
                 .exclude(id=participant.id)
                 .exists()
             ):

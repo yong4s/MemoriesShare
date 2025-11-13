@@ -49,8 +49,17 @@ class InviteService:
             Dict з результатом операції
         """
         try:
-            # Отримуємо подію
-            event = Event.objects.get(event_uuid=event_uuid, user=invited_by_user)
+            # Отримуємо подію та перевіряємо права через EventParticipant
+            event = Event.objects.get(event_uuid=event_uuid)
+            
+            # Перевіряємо, чи користувач є власником події
+            from apps.events.models.event_participant import EventParticipant
+            if not EventParticipant.objects.filter(
+                event=event, 
+                user=invited_by_user, 
+                role=EventParticipant.Role.OWNER
+            ).exists():
+                raise Event.DoesNotExist("No permission to invite")
 
             # Створюємо запрошення
             invite = EventInvite.objects.create_invite(

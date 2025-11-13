@@ -8,8 +8,8 @@ from rest_framework.response import Response
 from apps.accounts.services.user_service import UserService
 from apps.events.serializers import (
     BulkGuestInviteSerializer,
-    EventCreateSerializer,
     EventCreatedResponseSerializer,
+    EventCreateSerializer,
     EventDetailSerializer,
     EventListQuerySerializer,
     EventListSerializer,
@@ -21,20 +21,24 @@ from apps.events.serializers import (
     ParticipantListQuerySerializer,
 )
 from apps.events.services.event_service import EventService
-from apps.shared.base.service_aware_view import ServiceAwareAPIView, EventServiceMixin
-
+from apps.shared.base.base_api_view import BaseAPIView
 
 logger = logging.getLogger(__name__)
 
 
-class BaseEventAPIView(ServiceAwareAPIView, EventServiceMixin):
-    """
-    Base view for event operations using service factory pattern.
-    
-    This view demonstrates the new architecture with dependency injection
-    and service lifecycle management through the factory pattern.
-    """
-    pass
+class BaseEventAPIView(BaseAPIView):
+    """Base view for event operations"""
+
+    def __init__(self, event_service=None, user_service=None, **kwargs):
+        super().__init__(**kwargs)
+        self._event_service = event_service
+        self._user_service = user_service
+
+    def get_event_service(self):
+        return self._event_service or EventService()
+
+    def get_user_service(self):
+        return self._user_service or UserService()
 
 
 class EventCreateAPIView(BaseEventAPIView):
@@ -67,6 +71,31 @@ class EventListAPIView(BaseEventAPIView):
 
         events_data = self.get_event_service().get_events_list(
             filters=query_serializer.validated_data, user_id=request.user.id
+        )
+
+        events_serializer = EventListSerializer(events_data['events'], many=True)
+
+        response_data = {'events': events_serializer.data, 'pagination': events_data['pagination']}
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class MyEventsAPIView(BaseEventAPIView):
+    """List user's owned events"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get paginated list of user's owned events only"""
+        query_serializer = EventListQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+
+        # Force owned_only to True for this endpoint
+        filters = query_serializer.validated_data.copy()
+        filters['owned_only'] = True
+
+        events_data = self.get_event_service().get_events_list(
+            filters=filters, user_id=request.user.id
         )
 
         events_serializer = EventListSerializer(events_data['events'], many=True)
@@ -307,3 +336,89 @@ class MyEventRSVPAPIView(BaseEventAPIView):
 
         logger.info(f'User {request.user.id} updated own RSVP for event {event_uuid}')
         return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+
+# =============================================================================
+# EVENT ANALYTICS OPERATIONS
+# =============================================================================
+
+
+class EventAnalyticsAPIView(BaseEventAPIView):
+    """Event analytics and statistics"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_uuid):
+        """Get event analytics and statistics"""
+        event = self.get_event_service().get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
+        
+        from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
+        analytics_dal = EventAnalyticsDAL()
+        
+        # Get event statistics
+        statistics = analytics_dal.get_event_statistics(event)
+        
+        # Get participants by role/status breakdowns
+        participants = self.get_event_service().get_event_participants(
+            event_uuid=event_uuid, requesting_user_id=request.user.id
+        )
+        
+        response_data = {
+            'event_uuid': str(event_uuid),
+            'event_name': event.event_name,
+            'statistics': statistics,
+            'participant_breakdown': {
+                'by_role': {
+                    'owners': statistics.get('owners_count', 0),
+                    'moderators': statistics.get('moderators_count', 0),
+                    'guests': statistics.get('guests_count', 0),
+                },
+                'by_rsvp': {
+                    'accepted': statistics.get('accepted_count', 0),
+                    'pending': statistics.get('pending_count', 0),
+                    'declined': statistics.get('declined_count', 0),
+                }
+            },
+            'total_participants': len(participants)
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class UserEventAnalyticsAPIView(BaseEventAPIView):
+    """User's event analytics"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get user's event participation analytics"""
+        from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
+        analytics_dal = EventAnalyticsDAL()
+        
+        # Get user participation statistics
+        user_stats = analytics_dal.get_user_participation_statistics(request.user.id)
+        
+        # Get recent events
+        recent_events = analytics_dal.get_recent_events(request.user.id, limit=5)
+        
+        # Get upcoming events
+        upcoming_events = analytics_dal.get_upcoming_events(request.user.id, limit=5)
+        
+        # Serialize events
+        from apps.events.serializers import EventListSerializer
+        recent_serializer = EventListSerializer(recent_events, many=True)
+        upcoming_serializer = EventListSerializer(upcoming_events, many=True)
+        
+        response_data = {
+            'user_statistics': user_stats,
+            'recent_events': recent_serializer.data,
+            'upcoming_events': upcoming_serializer.data,
+            'summary': {
+                'total_events': user_stats.get('total_events', 0),
+                'owned_events': user_stats.get('owned_events', 0),
+                'upcoming_count': len(upcoming_events),
+                'recent_count': len(recent_events),
+            }
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)

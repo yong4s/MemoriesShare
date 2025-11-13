@@ -95,22 +95,11 @@ class Event(BaseModel):
     """
 
     # Core identification
-    event_uuid = models.UUIDField(_('Event UUID'), default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    event_uuid = models.UUIDField(_('Event UUID'), unique=True, editable=False, db_index=True)
 
     event_name = models.CharField(_('Event Name'), max_length=255, db_index=True)
 
     description = models.TextField(_('Description'), blank=True, default='')
-
-    # Legacy user field for migration compatibility
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='created_events',
-        verbose_name=_('Legacy Owner'),
-        null=True,
-        blank=True,
-        help_text=_('Deprecated - use participants relationship'),
-    )
 
     # M2M relationship through EventParticipant
     participants = models.ManyToManyField(
@@ -169,7 +158,7 @@ class Event(BaseModel):
         # Only restrict past dates for new events, allow editing historical events
         if self._state.adding and self.date and self.date < timezone.now().date():
             errors['date'] = _('Event date cannot be in the past')
-
+            
         if errors:
             raise ValidationError(errors)
 

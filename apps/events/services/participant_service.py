@@ -13,6 +13,7 @@ from django.utils import timezone
 from apps.accounts.models.custom_user import CustomUser
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
+from apps.shared.cache.cache_decorators import invalidate_event_cache_after, invalidate_user_cache_after, cached_method
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,8 @@ class EventParticipantService:
         self.dal = dal or EventParticipant.objects
 
     @transaction.atomic
+    @invalidate_event_cache_after(cache_types=['statistics', 'participants'])
+    @invalidate_user_cache_after(cache_types=['events', 'analytics'])
     def add_participant(self, event: Event, user: CustomUser, role: str, **kwargs) -> EventParticipant:
         """Add participant to event with validation."""
         if self.validator:
@@ -108,6 +111,8 @@ class EventParticipantService:
         logger.info(f'Participant {participant.id} declined invitation to event {participant.event.id}')
         return participant
 
+    @invalidate_event_cache_after(cache_types=['statistics', 'participants'])
+    @invalidate_user_cache_after(cache_types=['analytics'])
     def update_rsvp_status(self, participant: EventParticipant, new_status: str) -> EventParticipant:
         """
         Update participant RSVP status with business logic.
@@ -222,6 +227,7 @@ class EventParticipantService:
 
         return participant
 
+    @cached_method(timeout=240)  # 4 minutes cache for participation stats
     def get_participation_stats(self, event: Event) -> dict[str, int]:
         """Get participation statistics for an event."""
         from django.db.models import Count

@@ -43,8 +43,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
 class EventDetailSerializer(serializers.ModelSerializer):
     """Event details with statistics"""
 
-    owner_name = serializers.CharField(source='user.display_name', read_only=True)
-    owner_email = serializers.EmailField(source='user.email', read_only=True)
+    owner_name = serializers.SerializerMethodField()
+    owner_email = serializers.SerializerMethodField()
 
     # Statistics from annotations (populated by EventQuerySet.with_statistics())
     total_participants = serializers.IntegerField(read_only=True)
@@ -90,11 +90,27 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'pending_count',
         ]
 
+    def get_owner_name(self, obj):
+        """Get owner name from EventParticipant"""
+        try:
+            owner = obj.eventparticipant_set.filter(role='OWNER').first()
+            return owner.user.display_name if owner else 'No Owner'
+        except Exception:
+            return 'Unknown'
+
+    def get_owner_email(self, obj):
+        """Get owner email from EventParticipant"""
+        try:
+            owner = obj.eventparticipant_set.filter(role='OWNER').first()
+            return owner.user.email if owner else ''
+        except Exception:
+            return ''
+
 
 class EventListSerializer(serializers.ModelSerializer):
     """Event list item with basic info and statistics"""
 
-    owner_name = serializers.CharField(source='user.display_name', read_only=True)
+    owner_name = serializers.SerializerMethodField()
 
     # Statistics from annotations
     total_participants = serializers.IntegerField(read_only=True)
@@ -117,6 +133,14 @@ class EventListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    def get_owner_name(self, obj):
+        """Get owner name from EventParticipant"""
+        try:
+            owner = obj.eventparticipant_set.filter(role='OWNER').first()
+            return owner.user.display_name if owner else 'No Owner'
+        except Exception:
+            return 'Unknown'
+
 
 class EventUpdateSerializer(serializers.ModelSerializer):
     """Update existing event"""
@@ -135,7 +159,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
 class EventCreatedResponseSerializer(serializers.ModelSerializer):
     """Response after event creation"""
 
-    owner_name = serializers.CharField(source='user.display_name', read_only=True)
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -152,6 +176,14 @@ class EventCreatedResponseSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+
+    def get_owner_name(self, obj):
+        """Get owner name from EventParticipant"""
+        try:
+            owner = obj.eventparticipant_set.filter(role='OWNER').first()
+            return owner.user.display_name if owner else 'No Owner'
+        except Exception:
+            return 'Unknown'
 
 
 # =============================================================================
@@ -248,6 +280,7 @@ class EventListQuerySerializer(serializers.Serializer):
     page = serializers.IntegerField(default=1, min_value=1)
     page_size = serializers.IntegerField(default=20, min_value=1, max_value=100)
     search = serializers.CharField(required=False, max_length=255)
+    owned_only = serializers.BooleanField(default=False)
 
 
 

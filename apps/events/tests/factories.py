@@ -15,11 +15,10 @@ class EventFactory(factory.django.DjangoModelFactory):
         model = Event
 
     event_name = factory.Faker('sentence', nb_words=3)
-    user = factory.SubFactory(UserFactory)
+    event_uuid = factory.LazyFunction(lambda: __import__('uuid').uuid4())
     description = factory.Faker('paragraph', nb_sentences=5)
     date = factory.LazyFunction(lambda: date.today() + timedelta(days=7))
     is_public = False
-    max_guests = None
 
 
 class FutureEventFactory(EventFactory):
@@ -39,9 +38,9 @@ class PastEventFactory(EventFactory):
 
 
 class LimitedEventFactory(EventFactory):
-    """Factory для створення подій з обмеженою кількістю гостей"""
+    """Factory для створення подій (max_guests field removed)"""
 
-    max_guests = factory.Faker('pyint', min_value=1, max_value=10)
+    pass
 
 
 class GuestFactory(factory.django.DjangoModelFactory):
