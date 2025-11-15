@@ -1,10 +1,3 @@
-"""
-Event Data Access Layer - Focused on Event Model Only
-
-Handles database operations only for the Event model.
-Follows single responsibility principle for loose coupling.
-"""
-
 from typing import Any, Dict, List
 from django.core.paginator import Paginator
 from django.db.models import Q
