@@ -11,20 +11,27 @@ from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
 from apps.events.exceptions import EventCreationError, EventNotFoundError, EventPermissionError, ParticipantError
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
+from apps.events.services.permission_service import EventPermissionService
 from apps.shared.utils.uuid_generator import generate_event_uuid
 from apps.shared.storage.optimized_s3_service import OptimizedS3Service
-from apps.shared.cache.cache_decorators import invalidate_event_cache_after, invalidate_user_cache_after
+from apps.shared.cache.cache_manager import CacheManager
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EventService:
     """Service for event business logic operations"""
 
-    def __init__(self, event_dal=None, participant_dal=None, analytics_dal=None, user_service=None, s3_service=None):
-        self.dal = event_dal or EventDAL()
+    def __init__(self, dal=None, participant_dal=None, analytics_dal=None, user_service=None, s3_service=None, cache_manager=None, permission_service=None):
+        # DI параметри з fallback до default імплементацій - для Container + простота
+        self.dal = dal or EventDAL()
         self.participant_dal = participant_dal or EventParticipantDAL()
         self.analytics_dal = analytics_dal or EventAnalyticsDAL()
         self.user_service = user_service or UserService()
         self.s3_service = s3_service or OptimizedS3Service()
+        self.cache_manager = cache_manager or CacheManager()
+        self.permission_service = permission_service or EventPermissionService()
 
     @transaction.atomic
     def create_event(self, validated_data: dict[str, Any], user) -> Event:
@@ -34,12 +41,9 @@ class EventService:
         event_uuid = generate_event_uuid()
         event_data['event_uuid'] = event_uuid
 
-        s3_prefix = self._generate_s3_event_prefix(user.uuid, event_uuid)
-        # Create S3 folder structure: users/{user_uuid}/events/{event_uuid}
+        s3_prefix = self._generate_s3_event_prefix(user.user_uuid, event_uuid)
         event_data['s3_prefix'] = s3_prefix
-        event = self.dal.create_event(event_data)
 
-        # Step 1: Create event in database (transaction will auto-rollback if needed)
         try:
             event = self.dal.create_event(event_data)
             # Add creator as owner participant
@@ -47,7 +51,6 @@ class EventService:
         except Exception as db_error:
             raise EventCreationError(f'Failed to create event in database: {db_error!s}')
 
-        # Step 2: Create S3 folder (outside transaction for compensation pattern)
         try:
             # Use nested transaction to allow rollback if S3 fails
             with transaction.atomic():
@@ -66,20 +69,7 @@ class EventService:
                 )
 
     def get_event_detail(self, event_uuid: str, user_id: int) -> Event:
-        """
-        Get event details with permission check
 
-        Args:
-            event_uuid: Event UUID
-            user_id: Requesting user ID
-
-        Returns:
-            Event: Event instance with optimized data
-
-        Raises:
-            EventNotFoundError: If event not found
-            EventPermissionError: If user lacks access
-        """
         event = self.dal.get_event_by_uuid_optimized(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
@@ -103,24 +93,8 @@ class EventService:
         return self.dal.get_user_events_paginated(user_id, filters)
 
     @transaction.atomic
-    @invalidate_event_cache_after(cache_types=['detail', 'statistics'])
-    @invalidate_user_cache_after(cache_types=['events'])
     def update_event(self, event_uuid: str, validated_data: dict[str, Any], user_id: int) -> Event:
-        """
-        Update existing event
 
-        Args:
-            event_uuid: Event UUID
-            validated_data: Update data
-            user_id: Requesting user ID
-
-        Returns:
-            Event: Updated event instance
-
-        Raises:
-            EventNotFoundError: If event not found
-            EventPermissionError: If user cannot modify
-        """
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
@@ -128,26 +102,16 @@ class EventService:
         if not self.can_user_modify_event(event, user_id):
             raise EventPermissionError('You cannot modify this event')
 
-        return self.dal.update_event(event, validated_data)
+        updated_event = self.dal.update_event(event, validated_data)
+        
+        transaction.on_commit(lambda: self._invalidate_event_caches(event_uuid, ['detail', 'statistics']))
+        transaction.on_commit(lambda: self._invalidate_user_caches(user_id, ['events']))
+        
+        return updated_event
 
     @transaction.atomic
-    @invalidate_event_cache_after(cache_types=['detail', 'statistics', 'participants'])
-    @invalidate_user_cache_after(cache_types=['events', 'analytics'])
     def delete_event(self, event_uuid: str, user_id: int) -> bool:
-        """
-        Delete event (only by owner)
 
-        Args:
-            event_uuid: Event UUID
-            user_id: Requesting user ID
-
-        Returns:
-            bool: True if deleted successfully
-
-        Raises:
-            EventNotFoundError: If event not found
-            EventPermissionError: If user is not owner
-        """
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
@@ -155,31 +119,21 @@ class EventService:
         if not self.is_event_owner(event, user_id):
             raise EventPermissionError('Only event owner can delete the event')
 
-        return self.dal.delete_event(event)
+        result = self.dal.delete_event(event)
+        self.s3_service.delete_folder(event.s3_prefix)
 
-    # =============================================================================
+        
+        transaction.on_commit(lambda: self._invalidate_event_caches(event_uuid, ['detail', 'statistics', 'participants']))
+        transaction.on_commit(lambda: self._invalidate_user_caches(user_id, ['events', 'analytics']))
+        
+        return result
+
     # PARTICIPANT MANAGEMENT
-    # =============================================================================
 
     def get_event_participants(
         self, event_uuid: str, requesting_user_id: int, role_filter: str | None = None, rsvp_filter: str | None = None
     ) -> list[EventParticipant]:
-        """
-        Get event participants with permission check
 
-        Args:
-            event_uuid: Event UUID
-            requesting_user_id: User requesting the list
-            role_filter: Optional role filter
-            rsvp_filter: Optional RSVP status filter
-
-        Returns:
-            List of EventParticipant instances
-
-        Raises:
-            EventNotFoundError: If event not found
-            EventPermissionError: If user lacks access
-        """
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
@@ -200,26 +154,7 @@ class EventService:
         requesting_user_id: int = None,
         invite_token: str = None,
     ) -> EventParticipant:
-        """
-        Add participant to event
 
-        Args:
-            event_uuid: Event UUID
-            user: User to add as participant
-            role: Participant role
-            guest_name: Guest name (for guest users)
-            guest_email: Guest email (for guest users)
-            requesting_user_id: User making the request
-            invite_token: Optional invitation token
-
-        Returns:
-            EventParticipant: Created participation record
-
-        Raises:
-            EventNotFoundError: If event not found
-            EventPermissionError: If user cannot add participants
-            ParticipantError: If participant already exists or validation fails
-        """
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
@@ -248,22 +183,7 @@ class EventService:
 
     @transaction.atomic
     def remove_participant_from_event(self, event_uuid: str, user, requesting_user_id: int) -> bool:
-        """
-        Remove participant from event
 
-        Args:
-            event_uuid: Event UUID
-            user: User to remove
-            requesting_user_id: User making the request
-
-        Returns:
-            bool: True if removed successfully
-
-        Raises:
-            EventNotFoundError: If event not found
-            EventPermissionError: If user cannot remove participants
-            ParticipantError: If participant not found
-        """
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
@@ -405,3 +325,21 @@ class EventService:
     def _generate_s3_event_prefix(self, user_uuid, event_uuid):
         """Generate event prefix"""
         return f'users/{user_uuid}/events/{event_uuid}'
+
+    def _invalidate_event_caches(self, event_uuid: str, cache_types: list[str]) -> None:
+        """Safely invalidate event-related caches"""
+        try:
+            for cache_type in cache_types:
+                self.cache_manager.invalidate_event_cache(event_uuid, cache_type)
+        except Exception as e:
+            # Log cache errors but don't fail the operation
+            logger.warning(f"Failed to invalidate event cache {cache_type} for {event_uuid}: {e}")
+    
+    def _invalidate_user_caches(self, user_id: int, cache_types: list[str]) -> None:
+        """Safely invalidate user-related caches"""
+        try:
+            for cache_type in cache_types:
+                self.cache_manager.invalidate_user_cache(user_id, cache_type)
+        except Exception as e:
+            # Log cache errors but don't fail the operation
+            logger.warning(f"Failed to invalidate user cache {cache_type} for user {user_id}: {e}")

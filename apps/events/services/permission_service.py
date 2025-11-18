@@ -7,11 +7,12 @@ from rest_framework.exceptions import PermissionDenied
 from apps.accounts.services import UserService
 from apps.events.dal.event_dal import EventDAL
 from apps.events.dal.event_participant_dal import EventParticipantDAL
+from apps.shared.interfaces.permission_interface import IPermissionValidator
 
 logger = logging.getLogger(__name__)
 
 
-class EventPermissionService:
+class EventPermissionService(IPermissionValidator):
     """Service for event permission checking and validation"""
 
     def __init__(self, dal: EventDAL | None = None, participant_dal: EventParticipantDAL | None = None, user_service: UserService | None = None) -> None:
@@ -166,6 +167,27 @@ class EventPermissionService:
             logger.error(f'Error getting permissions for user {user_id}, event {event.id}: {e}')
 
         return permissions
+
+    # =============================================================================
+    # NEW METHODS FOR DRF PERMISSIONS (simplified API)
+    # =============================================================================
+
+    def can_user_access_event(self, event, user_id: int) -> bool:
+        """Check if user can access event"""
+        return self.is_event_owner(event, user_id) or self.participant_dal.is_user_participant_by_id(event, user_id)
+
+    def can_user_modify_event(self, event, user_id: int) -> bool:
+        """Check if user can modify event"""
+        if self.is_event_owner(event, user_id):
+            return True
+
+        # Check if user is moderator
+        participation = self.participant_dal.get_user_participation_by_id(event, user_id)
+        return participation and participation.role == 'MODERATOR'
+
+    def get_user_participation_in_event(self, event, user) -> Any | None:
+        """Get user's participation in event"""
+        return self.participant_dal.get_user_participation(event, user)
 
     # =============================================================================
     # INTERNAL HELPERS

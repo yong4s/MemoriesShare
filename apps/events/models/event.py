@@ -1,12 +1,3 @@
-"""
-Event Models
-
-Clean "dumb" models that only define data structure.
-Business logic moved to services, query optimization to managers.
-"""
-
-import uuid
-
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models

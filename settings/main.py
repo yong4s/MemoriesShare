@@ -244,6 +244,18 @@ SIMPLE_JWT = {
 # Legacy JWT service key (for backward compatibility)
 SIMPLE_JWT_SECRET_KEY = env.str('SIMPLE_JWT_SECRET_KEY', default='dev-jwt-secret-key-change-in-production')
 
+# Email Configuration
+EMAIL_BACKEND = env.str('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = env.str('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env.str('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env.str('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env.str('DEFAULT_FROM_EMAIL', default='MediaFlow <noreply@mediaflow.com>')
+
+# Email Templates
+EMAIL_SUBJECT_PREFIX = '[MediaFlow] '
+
 # Celery Configuration
 CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default='redis://localhost:6379/1')
@@ -268,6 +280,30 @@ CELERY_WORKER_DISABLE_RATE_LIMITS = True
 
 # Celery task time limits (in seconds)
 CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+
+# Celery Email Task Configuration
+CELERY_TASK_ROUTES = {
+    'apps.events.tasks.send_invite_confirmation_email': {'queue': 'emails'},
+    'apps.events.tasks.send_invite_notification_email': {'queue': 'emails'},
+    'apps.events.tasks.cleanup_expired_magic_links': {'queue': 'maintenance'},
+}
+
+CELERY_TASK_ANNOTATIONS = {
+    'apps.events.tasks.send_invite_confirmation_email': {
+        'rate_limit': '10/m',  # 10 emails per minute to avoid spam
+        'time_limit': 30,      # 30 seconds timeout
+        'max_retries': 3,
+        'default_retry_delay': 60,
+    },
+    'apps.events.tasks.send_invite_notification_email': {
+        'rate_limit': '5/m',
+        'time_limit': 30,
+        'max_retries': 3,
+    },
+    'apps.events.tasks.cleanup_expired_magic_links': {
+        'time_limit': 120,  # 2 minutes for cleanup
+    },
+}
 CELERY_TASK_TIME_LIMIT = 600  # 10 minutes
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True

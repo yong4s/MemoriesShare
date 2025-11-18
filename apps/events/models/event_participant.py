@@ -209,7 +209,7 @@ class EventParticipant(BaseModel):
         db_table = 'events_eventparticipant'
         verbose_name = _('Event Participant')
         verbose_name_plural = _('Event Participants')
-        unique_together = ('event', 'user')  # User can only participate once per event
+        unique_together = ('event', 'user')
         ordering = ['event', 'role', 'user__email']
         indexes = [
             models.Index(fields=['event', 'role']),

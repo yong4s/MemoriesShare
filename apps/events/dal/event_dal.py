@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.events.models.event import Event
-from apps.shared.cache.cache_decorators import cached_method
+# Removed cache decorators - using simple direct caching in services
 
 
 class EventDAL:
@@ -21,12 +21,12 @@ class EventDAL:
         except Event.DoesNotExist:
             return None
 
-    @cached_method(timeout=300)  # 5 minutes cache for event details  
+    # Cache removed - using simple direct approach  
     def get_event_by_uuid_optimized(self, event_uuid: str) -> Event | None:
         """Get event with optimized queries for related data"""
         try:
             return Event.objects.select_related().prefetch_related(
-                'eventparticipant_set__user'
+                'participants_through__user'
             ).get(event_uuid=event_uuid)
         except Event.DoesNotExist:
             return None
@@ -43,8 +43,8 @@ class EventDAL:
             # Get events where user is OWNER in EventParticipant
             from apps.events.models.event_participant import EventParticipant
             queryset = Event.objects.filter(
-                eventparticipant__user_id=user_id,
-                eventparticipant__role=EventParticipant.Role.OWNER
+                participants_through__user_id=user_id,
+                participants_through__role=EventParticipant.Role.OWNER
             ).distinct()
         else:
             queryset = Event.objects.for_user(user_id)

@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
-from apps.shared.cache.cache_decorators import cached_method, cache_for_15_minutes
+# Removed cache decorators - using simple direct caching
 
 
 class EventAnalyticsDAL:
@@ -37,7 +37,7 @@ class EventAnalyticsDAL:
             .order_by('date')[:limit]
         )
 
-    @cached_method(timeout=300)  # 5 minutes cache for event statistics
+    # Cache removed  # 5 minutes cache for event statistics
     def get_event_statistics(self, event: Event) -> dict[str, Any]:
         """Get detailed statistics for event"""
         participants = EventParticipant.objects.filter(event=event)
@@ -54,7 +54,7 @@ class EventAnalyticsDAL:
 
         return stats
 
-    @cached_method(timeout=600)  # 10 minutes cache for user statistics
+    # Cache removed  # 10 minutes cache for user statistics
     def get_user_participation_statistics(self, user_id: int) -> dict[str, Any]:
         """Get user's event participation statistics"""
         user_participations = EventParticipant.objects.filter(user_id=user_id)
@@ -83,13 +83,12 @@ class EventAnalyticsDAL:
 
         return list(queryset.order_by('date'))
 
-    @cache_for_15_minutes  # 15 minutes cache for popular events
+    # Cache removed - 15 minutes cache for popular events
     def get_popular_events(self, limit: int = 10) -> List[Event]:
         """Get events with most participants"""
         return list(
             Event.objects.annotate(
-                participant_count=Count('eventparticipant')
+                participant_count=Count('participants')
             )
-            .order_by('-participant_count')
-            .select_related('user')[:limit]
+            .order_by('-participant_count')[:limit]
         )

@@ -27,7 +27,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 
 from apps.shared.exceptions.exception import S3ServiceError
-from apps.shared.interfaces.service_interfaces import IS3Service
+# Removed interface inheritance - using simple direct class
 from apps.shared.utils.uuid_utils import S3KeyGenerator
 from apps.shared.utils.uuid_utils import UUIDValidator
 from apps.shared.utils.validators import FileUploadValidator
@@ -548,7 +548,7 @@ class S3FolderManager:
             raise S3ServiceError(error_msg)
 
 
-class OptimizedS3Service(IS3Service):
+class OptimizedS3Service:
     """
     Professional S3 service implementing SOLID principles and AWS best practices.
 

@@ -56,7 +56,6 @@ class EventDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = [
-            'id',
             'event_uuid',
             'event_name',
             'description',
@@ -77,7 +76,6 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'pending_count',
         ]
         read_only_fields = [
-            'id',
             'event_uuid',
             'owner_name',
             'owner_email',
@@ -119,7 +117,6 @@ class EventListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = [
-            'id',
             'event_uuid',
             'event_name',
             'date',
@@ -164,7 +161,6 @@ class EventCreatedResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = [
-            'id',
             'event_uuid',
             'event_name',
             'description',
@@ -201,7 +197,6 @@ class EventParticipantDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventParticipant
         fields = [
-            'id',
             'role',
             'rsvp_status',
             'guest_name',
@@ -214,7 +209,6 @@ class EventParticipantDetailSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = [
-            'id',
             'user_name',
             'user_email',
             'is_registered_user',
@@ -232,7 +226,7 @@ class EventParticipantListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventParticipant
-        fields = ['id', 'role', 'rsvp_status', 'guest_name', 'user_name', 'is_registered_user', 'created_at']
+        fields = ['role', 'rsvp_status', 'guest_name', 'user_name', 'is_registered_user', 'created_at']
         read_only_fields = fields
 
 

@@ -6,6 +6,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.services.user_service import UserService
+from apps.events.permissions import (
+    CanAccessEvent,
+    EventPermissionMixin,
+    IsEventOwner,
+    IsEventOwnerOrModerator,
+    IsEventParticipant,
+)
 from apps.events.serializers import (
     BulkGuestInviteSerializer,
     EventCreatedResponseSerializer,
@@ -20,8 +27,8 @@ from apps.events.serializers import (
     GuestInviteSerializer,
     ParticipantListQuerySerializer,
 )
-from apps.events.services.event_service import EventService
 from apps.shared.base.base_api_view import BaseAPIView
+from apps.shared.container import get_event_service
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +42,7 @@ class BaseEventAPIView(BaseAPIView):
         self._user_service = user_service
 
     def get_event_service(self):
-        return self._event_service or EventService()
+        return self._event_service or get_event_service()
 
     def get_user_service(self):
         return self._user_service or UserService()
@@ -105,10 +112,10 @@ class MyEventsAPIView(BaseEventAPIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-class EventDetailAPIView(BaseEventAPIView):
+class EventDetailAPIView(BaseEventAPIView, EventPermissionMixin):
     """Get event details"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessEvent]
 
     def get(self, request, event_uuid):
         """Get detailed event information"""
@@ -118,10 +125,10 @@ class EventDetailAPIView(BaseEventAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class EventUpdateAPIView(BaseEventAPIView):
+class EventUpdateAPIView(BaseEventAPIView, EventPermissionMixin):
     """Update event"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEventOwnerOrModerator]
 
     def put(self, request, event_uuid):
         """Update existing event"""
@@ -140,10 +147,10 @@ class EventUpdateAPIView(BaseEventAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class EventDeleteAPIView(BaseEventAPIView):
+class EventDeleteAPIView(BaseEventAPIView, EventPermissionMixin):
     """Delete event"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEventOwner]
 
     def delete(self, request, event_uuid):
         """Delete existing event"""
@@ -160,10 +167,10 @@ class EventDeleteAPIView(BaseEventAPIView):
 # =============================================================================
 
 
-class EventParticipantListAPIView(BaseEventAPIView):
+class EventParticipantListAPIView(BaseEventAPIView, EventPermissionMixin):
     """List event participants"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessEvent]
 
     def get(self, request, event_uuid):
         """Get list of event participants"""
@@ -182,10 +189,10 @@ class EventParticipantListAPIView(BaseEventAPIView):
         return Response({'participants': serializer.data, 'count': len(participants)}, status=status.HTTP_200_OK)
 
 
-class EventParticipantDetailAPIView(BaseEventAPIView):
+class EventParticipantDetailAPIView(BaseEventAPIView, EventPermissionMixin):
     """Get participant details"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessEvent]
 
     def get(self, request, event_uuid, participant_id):
         """Get detailed participant information"""
@@ -201,10 +208,10 @@ class EventParticipantDetailAPIView(BaseEventAPIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class EventParticipantRSVPUpdateAPIView(BaseEventAPIView):
+class EventParticipantRSVPUpdateAPIView(BaseEventAPIView, EventPermissionMixin):
     """Update participant RSVP status"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEventOwnerOrModerator]
 
     def patch(self, request, event_uuid, participant_id):
         """Update RSVP status for participant"""
@@ -234,10 +241,10 @@ class EventParticipantRSVPUpdateAPIView(BaseEventAPIView):
 
 
 # invitation
-class EventGuestInviteAPIView(BaseEventAPIView):
+class EventGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
     """Invite guest to event"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEventOwnerOrModerator]
 
     def post(self, request, event_uuid):
         """Invite a guest user to the event"""
@@ -258,10 +265,10 @@ class EventGuestInviteAPIView(BaseEventAPIView):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
-class EventBulkGuestInviteAPIView(BaseEventAPIView):
+class EventBulkGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
     """Invite multiple guests to event"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEventOwnerOrModerator]
 
     def post(self, request, event_uuid):
         """Invite multiple guests to the event"""
@@ -304,10 +311,10 @@ class EventBulkGuestInviteAPIView(BaseEventAPIView):
 # =============================================================================
 
 
-class MyEventRSVPAPIView(BaseEventAPIView):
+class MyEventRSVPAPIView(BaseEventAPIView, EventPermissionMixin):
     """User's own RSVP management"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEventParticipant]
 
     def get(self, request, event_uuid):
         """Get current user's RSVP status for event"""
@@ -343,10 +350,10 @@ class MyEventRSVPAPIView(BaseEventAPIView):
 # =============================================================================
 
 
-class EventAnalyticsAPIView(BaseEventAPIView):
+class EventAnalyticsAPIView(BaseEventAPIView, EventPermissionMixin):
     """Event analytics and statistics"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanAccessEvent]
 
     def get(self, request, event_uuid):
         """Get event analytics and statistics"""

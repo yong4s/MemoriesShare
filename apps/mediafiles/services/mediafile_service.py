@@ -27,25 +27,14 @@ class MediafileService:
     """
 
     def __init__(self, s3service=None, permission_service=None):
-        """
-        Ініціалізація сервісу з опціональними залежностями.
-
-        Args:
-            s3service: S3 сервіс для роботи з файлами
-            permission_service: Сервіс для перевірки дозволів
-        """
+        """Ініціалізація сервісу з опціональними залежностями для DI Container"""
         self.s3service = s3service or OptimizedS3Service()
-        # Використовуємо lazy import для уникнення циклічних залежностей
-        self._permission_service = permission_service
-
-    @property
-    def permission_service(self):
-        """Lazy initialization EventPermissionService"""
-        if self._permission_service is None:
-            from apps.events.services.permission_service import EventPermissionService
-
-            self._permission_service = EventPermissionService()
-        return self._permission_service
+        self.permission_service = permission_service or self._get_permission_service()
+    
+    def _get_permission_service(self):
+        """Ініціалізація EventPermissionService"""
+        from apps.events.services.permission_service import EventPermissionService
+        return EventPermissionService()
 
     def create_mediafile(self, serializer, user, album_pk):
         """

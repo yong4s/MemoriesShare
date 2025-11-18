@@ -10,7 +10,7 @@ from django.db.models import Q
 
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
-from apps.shared.cache.cache_decorators import cached_method
+# Removed cache decorators - using simple direct caching
 
 
 class EventParticipantDAL:
@@ -67,7 +67,7 @@ class EventParticipantDAL:
         participation.delete()
         return True
 
-    @cached_method(timeout=300)  # 5 minutes cache for participant count
+    # Cache removed  # 5 minutes cache for participant count
     def get_participants_count(self, event: Event) -> int:
         """Get total participants count for event"""
         return EventParticipant.objects.filter(event=event).count()
@@ -91,7 +91,7 @@ class EventParticipantDAL:
     def get_user_events_as_participant(self, user_id: int) -> list[Event]:
         """Get events where user is a participant"""
         return list(
-            Event.objects.filter(eventparticipant__user_id=user_id)
+            Event.objects.filter(participants_through__user_id=user_id)
             .distinct()
             .select_related('user')
             .order_by('-created_at')
