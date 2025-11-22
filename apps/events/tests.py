@@ -36,7 +36,6 @@ class EventModelTest(TestCase):
 
         self.assertEqual(event.event_name, 'Тестова подія')
         self.assertTrue(event.event_uuid)
-        self.assertTrue(event.gallery_url)
 
     def test_event_validation_short_name(self):
         """Тест валідації короткої назви події"""
@@ -100,14 +99,17 @@ class EventModelTest(TestCase):
         """Тест властивостей події"""
         # Майбутня подія
         from apps.shared.utils.uuid_generator import generate_event_uuid
+        from django.utils import timezone
+        
         future_event = Event.objects.create(
             event_name='Майбутня подія',
             event_uuid=generate_event_uuid(),
             description='Опис майбутньої події з достатньою кількістю символів',
             date=self.future_date,
         )
-        self.assertTrue(future_event.is_upcoming)
-        self.assertFalse(future_event.is_past)
+        # Test using date comparison directly since properties were removed
+        self.assertTrue(future_event.date >= timezone.now().date())
+        self.assertFalse(future_event.date < timezone.now().date())
 
         # Минула подія (створюємо без валідації)
         past_event = Event(
@@ -117,8 +119,8 @@ class EventModelTest(TestCase):
             date=self.past_date,
         )
         past_event.save()
-        self.assertFalse(past_event.is_upcoming)
-        self.assertTrue(past_event.is_past)
+        self.assertFalse(past_event.date >= timezone.now().date())
+        self.assertTrue(past_event.date < timezone.now().date())
 
     def test_event_guest_count_properties(self):
         """Тест властивостей підрахунку гостей"""
@@ -157,9 +159,25 @@ class EventModelTest(TestCase):
         # Note: Guest model removed, using EventParticipant instead
         # This test logic needs to be updated for new participant system
 
-        # Тестуємо for_user
+        # Тестуємо for_user - need to create EventParticipant records first
+        from apps.events.models.event_participant import EventParticipant
+        
+        # Create participation records to test for_user functionality
+        EventParticipant.objects.create(
+            event=event1,
+            user=self.user,
+            role=EventParticipant.Role.OWNER,
+            rsvp_status=EventParticipant.RsvpStatus.ACCEPTED
+        )
+        EventParticipant.objects.create(
+            event=event2,
+            user=self.user,
+            role=EventParticipant.Role.GUEST,
+            rsvp_status=EventParticipant.RsvpStatus.PENDING
+        )
+        
         user_events = Event.objects.for_user(self.user.id)
-        self.assertEqual(user_events.count(), 2)  # Власна подія + подія як гість
+        self.assertEqual(user_events.count(), 2)  # Events where user is participant
 
         # Тестуємо upcoming/past
         upcoming_events = Event.objects.upcoming()

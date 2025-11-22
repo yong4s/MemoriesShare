@@ -7,32 +7,85 @@ Follows single responsibility principle for loose coupling.
 
 from typing import Any, Dict, List
 from django.db.models import Q
+from django.db import DatabaseError, IntegrityError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
 
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
-# Removed cache decorators - using simple direct caching
+from apps.events.exceptions import ParticipantNotFoundError, DuplicateParticipantError
+from apps.shared.exceptions import ServiceUnavailableError, ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EventParticipantDAL:
     """Data Access Layer for EventParticipant model operations only"""
 
     def create_participant(self, participation_data: dict[str, Any]) -> EventParticipant:
-        """Create new participant"""
-        return EventParticipant.objects.create(**participation_data)
+        """Create new participant with exception translation"""
+        try:
+            return EventParticipant.objects.create(**participation_data)
+        except IntegrityError as e:
+            # Check if it's a unique constraint violation (duplicate participant)
+            if 'unique_together' in str(e).lower() or 'duplicate' in str(e).lower():
+                user = participation_data.get('user')
+                user_id = user.id if user else 'unknown'
+                logger.warning(f"Duplicate participant creation attempt for user {user_id}")
+                raise DuplicateParticipantError(user_identifier=str(user_id))
+            else:
+                logger.error(f"Participant creation failed - integrity error: {e}")
+                raise ValidationError(f"Participant creation validation failed: {str(e)}")
+        except DjangoValidationError as e:
+            logger.error(f"Participant creation failed - validation error: {e}")
+            raise ValidationError(f"Participant data validation failed: {str(e)}")
+        except DatabaseError as e:
+            logger.error(f"Participant creation failed - database error: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Participant creation failed - unexpected error: {e}")
+            raise ServiceUnavailableError(f"Unexpected error during participant creation: {str(e)}")
 
-    def get_user_participation(self, event: Event, user) -> EventParticipant | None:
-        """Get user's participation in event"""
+    def get_user_participation(self, event: Event, user) -> EventParticipant:
+        """Get user's participation in event with exception translation"""
         try:
             return EventParticipant.objects.get(event=event, user=user)
         except EventParticipant.DoesNotExist:
-            return None
+            logger.debug(f"Participant not found for user {user.id} in event {event.event_uuid}")
+            raise ParticipantNotFoundError(participant_identifier=f"user_{user.id}")
+        except DatabaseError as e:
+            logger.error(f"Database error while fetching participant: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error while fetching participant: {e}")
+            raise ServiceUnavailableError(f"Unexpected database error: {str(e)}")
 
     def get_user_participation_by_id(self, event: Event, user_id: int) -> EventParticipant | None:
-        """Get user's participation by user ID"""
+        """Get user's participation by user ID - returns None if not found (no exception)"""
         try:
             return EventParticipant.objects.get(event=event, user_id=user_id)
         except EventParticipant.DoesNotExist:
             return None
+        except DatabaseError as e:
+            logger.error(f"Database error while fetching participant by ID: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error while fetching participant by ID: {e}")
+            raise ServiceUnavailableError(f"Unexpected database error: {str(e)}")
+            
+    def get_user_participation_by_id_strict(self, event: Event, user_id: int) -> EventParticipant:
+        """Get user's participation by user ID - raises exception if not found"""
+        try:
+            return EventParticipant.objects.get(event=event, user_id=user_id)
+        except EventParticipant.DoesNotExist:
+            logger.debug(f"Participant not found for user {user_id} in event {event.event_uuid}")
+            raise ParticipantNotFoundError(participant_identifier=f"user_{user_id}")
+        except DatabaseError as e:
+            logger.error(f"Database error while fetching participant by ID: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error while fetching participant by ID: {e}")
+            raise ServiceUnavailableError(f"Unexpected database error: {str(e)}")
 
     def is_user_participant(self, event: Event, user) -> bool:
         """Check if user is participant in event"""

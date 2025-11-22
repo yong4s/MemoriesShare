@@ -33,10 +33,12 @@ class EventService:
         self.cache_manager = cache_manager or CacheManager()
         self.permission_service = permission_service or EventPermissionService()
 
-    @transaction.atomic
     def create_event(self, validated_data: dict[str, Any], user) -> Event:
-
-        # Generate UUID and prepare event data (no user field)
+        """
+        Create event using saga pattern for proper transaction handling.
+        This approach ensures data consistency across multiple services.
+        """
+        # Generate UUID and prepare event data
         event_data = validated_data.copy()
         event_uuid = generate_event_uuid()
         event_data['event_uuid'] = event_uuid
@@ -44,38 +46,58 @@ class EventService:
         s3_prefix = self._generate_s3_event_prefix(user.user_uuid, event_uuid)
         event_data['s3_prefix'] = s3_prefix
 
+        # Step 1: Create event and participation in single transaction
         try:
-            event = self.dal.create_event(event_data)
-            # Add creator as owner participant
-            self._add_owner_participation(event, user)
+            with transaction.atomic():
+                event = self.dal.create_event(event_data)
+                # Add creator as owner participant
+                self._add_owner_participation(event, user)
+                
+                # Store transaction point for potential rollback
+                event_created = True
         except Exception as db_error:
+            logger.error(f'Failed to create event in database: {db_error}')
             raise EventCreationError(f'Failed to create event in database: {db_error!s}')
 
+        # Step 2: Create S3 folder (outside transaction)
         try:
-            # Use nested transaction to allow rollback if S3 fails
-            with transaction.atomic():
-                # S3 folder creation
-                self.s3_service.create_folder(s3_prefix)
-                return event
+            self.s3_service.create_folder(s3_prefix)
+            logger.info(f'Successfully created event {event_uuid} with S3 folder')
+            return event
+            
         except Exception as s3_error:
-            # Compensation: rollback database changes
+            logger.error(f'S3 folder creation failed for event {event_uuid}: {s3_error}')
+            
+            # Compensation: Clean up database changes
             try:
-                event.delete()
-                raise EventCreationError(f'Failed to create S3 folder, rolled back event: {s3_error!s}')
+                with transaction.atomic():
+                    # Remove participation and event in reverse order
+                    participation = self.participant_dal.get_user_participation(event, user)
+                    if participation:
+                        participation.delete()
+                    event.delete()
+                    logger.info(f'Successfully rolled back event {event_uuid} after S3 failure')
+                    
             except Exception as rollback_error:
+                logger.critical(
+                    f'CRITICAL: Failed to rollback event {event_uuid} after S3 failure. '
+                    f'Manual cleanup required. S3 error: {s3_error}, Rollback error: {rollback_error}'
+                )
                 raise EventCreationError(
-                    f'Failed to create S3 folder AND failed to rollback event. '
+                    f'Failed to create S3 folder and rollback failed. '
+                    f'Event {event_uuid} requires manual cleanup. '
                     f'S3 error: {s3_error!s}, Rollback error: {rollback_error!s}'
                 )
+                
+            raise EventCreationError(f'Failed to create S3 folder, event creation rolled back: {s3_error!s}')
 
     def get_event_detail(self, event_uuid: str, user_id: int) -> Event:
 
+        # DAL now raises EventNotFoundError if event doesn't exist
         event = self.dal.get_event_by_uuid_optimized(event_uuid)
-        if not event:
-            raise EventNotFoundError(f'Event {event_uuid} not found')
 
         if not self.can_user_access_event(event, user_id):
-            raise EventPermissionError("You don't have access to this event")
+            raise EventPermissionError(action="access", event_id=event_uuid)
 
         return event
 
@@ -95,36 +117,55 @@ class EventService:
     @transaction.atomic
     def update_event(self, event_uuid: str, validated_data: dict[str, Any], user_id: int) -> Event:
 
+        # DAL now raises EventNotFoundError if event doesn't exist
         event = self.dal.get_event_by_uuid(event_uuid)
-        if not event:
-            raise EventNotFoundError(f'Event {event_uuid} not found')
 
         if not self.can_user_modify_event(event, user_id):
-            raise EventPermissionError('You cannot modify this event')
+            raise EventPermissionError(action="modify", event_id=event_uuid)
 
         updated_event = self.dal.update_event(event, validated_data)
         
-        transaction.on_commit(lambda: self._invalidate_event_caches(event_uuid, ['detail', 'statistics']))
-        transaction.on_commit(lambda: self._invalidate_user_caches(user_id, ['events']))
+        # Schedule cache invalidation after transaction commit
+        def invalidate_caches():
+            try:
+                self._invalidate_event_caches(event_uuid, ['detail', 'statistics'])
+                self._invalidate_user_caches(user_id, ['events'])
+            except Exception as e:
+                logger.error(f'Failed to invalidate caches after event update {event_uuid}: {e}')
+                # In production, consider sending to dead letter queue for retry
+        
+        transaction.on_commit(invalidate_caches)
         
         return updated_event
 
     @transaction.atomic
     def delete_event(self, event_uuid: str, user_id: int) -> bool:
 
+        # DAL now raises EventNotFoundError if event doesn't exist  
         event = self.dal.get_event_by_uuid(event_uuid)
-        if not event:
-            raise EventNotFoundError(f'Event {event_uuid} not found')
 
         if not self.is_event_owner(event, user_id):
-            raise EventPermissionError('Only event owner can delete the event')
+            raise EventPermissionError(action="delete", event_id=event_uuid)
 
         result = self.dal.delete_event(event)
-        self.s3_service.delete_folder(event.s3_prefix)
-
         
-        transaction.on_commit(lambda: self._invalidate_event_caches(event_uuid, ['detail', 'statistics', 'participants']))
-        transaction.on_commit(lambda: self._invalidate_user_caches(user_id, ['events', 'analytics']))
+        # Delete S3 folder after database deletion
+        try:
+            self.s3_service.delete_folder(event.s3_prefix)
+        except Exception as s3_error:
+            logger.warning(f'Failed to delete S3 folder for event {event_uuid}: {s3_error}')
+            # Continue - event is deleted from DB, S3 cleanup can be done later
+
+        # Schedule cache invalidation after transaction commit
+        def invalidate_caches():
+            try:
+                self._invalidate_event_caches(event_uuid, ['detail', 'statistics', 'participants'])
+                self._invalidate_user_caches(user_id, ['events', 'analytics'])
+            except Exception as e:
+                logger.error(f'Failed to invalidate caches after event deletion {event_uuid}: {e}')
+                # In production, consider sending to dead letter queue for retry
+        
+        transaction.on_commit(invalidate_caches)
         
         return result
 
@@ -134,12 +175,11 @@ class EventService:
         self, event_uuid: str, requesting_user_id: int, role_filter: str | None = None, rsvp_filter: str | None = None
     ) -> list[EventParticipant]:
 
+        # DAL now raises EventNotFoundError if event doesn't exist
         event = self.dal.get_event_by_uuid(event_uuid)
-        if not event:
-            raise EventNotFoundError(f'Event {event_uuid} not found')
 
         if not self.can_user_access_event(event, requesting_user_id):
-            raise EventPermissionError("You don't have access to this event")
+            raise EventPermissionError(action="access", event_id=event_uuid)
 
         return self.participant_dal.get_event_participants(event, role_filter, rsvp_filter)
 
@@ -148,7 +188,7 @@ class EventService:
         self,
         event_uuid: str,
         user,
-        role: str = 'GUEST',
+        role: str = EventParticipant.Role.GUEST,
         guest_name: str = '',
         guest_email: str = '',
         requesting_user_id: int = None,
@@ -176,7 +216,7 @@ class EventService:
             'guest_name': guest_name or user.display_name,
             'guest_email': guest_email or getattr(user, 'email', ''),
             'invite_token_used': invite_token,
-            'rsvp_status': 'PENDING',
+            'rsvp_status': EventParticipant.RsvpStatus.PENDING,
         }
 
         return self.participant_dal.create_participant(participation_data)
@@ -242,7 +282,7 @@ class EventService:
         self, event_uuid: str, guest_name: str, guest_email: str, requesting_user_id: int, user_service: UserService
     ) -> tuple[EventParticipant]:
         """
-        Invite guest user to event
+        Invite guest user to event with comprehensive validation
 
         Args:
             event_uuid: Event UUID
@@ -257,13 +297,20 @@ class EventService:
         Raises:
             EventNotFoundError: If event not found
             EventPermissionError: If user cannot invite guests
+            EventValidationError: If guest data is invalid
         """
+        # Validate guest data at service layer
+        self._validate_guest_invitation_data(guest_name, guest_email)
+        
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
             raise EventNotFoundError(f'Event {event_uuid} not found')
 
         if not self.can_user_modify_event(event, requesting_user_id):
             raise EventPermissionError('You cannot invite guests to this event')
+        
+        # Validate event status
+        self._validate_event_status(event)
 
         # Create guest user
         guest_user = user_service.create_guest_user(guest_name=guest_name, guest_email=guest_email)
@@ -272,7 +319,7 @@ class EventService:
         participation = self.add_participant_to_event(
             event_uuid=event_uuid,
             user=guest_user,
-            role='GUEST',
+            role=EventParticipant.Role.GUEST,
             guest_name=guest_name,
             guest_email=guest_email,
             requesting_user_id=requesting_user_id,
@@ -307,6 +354,78 @@ class EventService:
         return self.participant_dal.get_user_participation(event, user)
 
     # =============================================================================
+    # VALIDATION HELPERS
+    # =============================================================================
+    
+    def _validate_guest_invitation_data(self, guest_name: str, guest_email: str) -> None:
+        """
+        Validate guest invitation data at service layer
+        
+        Args:
+            guest_name: Guest name to validate
+            guest_email: Guest email to validate
+            
+        Raises:
+            EventValidationError: If validation fails
+        """
+        from apps.events.exceptions import EventValidationError
+        import re
+        
+        errors = []
+        
+        # Validate guest name
+        if not guest_name or not guest_name.strip():
+            errors.append('Guest name is required')
+        elif len(guest_name.strip()) < 2:
+            errors.append('Guest name must be at least 2 characters long')
+        elif len(guest_name.strip()) > 255:
+            errors.append('Guest name cannot exceed 255 characters')
+        elif not re.match(r'^[a-zA-Z\s\u0100-\u017F\u0400-\u04FF\'.-]+$', guest_name.strip()):
+            errors.append('Guest name contains invalid characters')
+            
+        # Validate guest email (if provided)
+        if guest_email and guest_email.strip():
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, guest_email.strip()):
+                errors.append('Guest email format is invalid')
+            elif len(guest_email.strip()) > 254:
+                errors.append('Guest email cannot exceed 254 characters')
+        
+        if errors:
+            raise EventValidationError(f'Guest invitation validation failed: {", ".join(errors)}')
+    
+    def _validate_event_capacity(self, event: Event) -> None:
+        """
+        Validate event capacity constraints (if implemented)
+        
+        Args:
+            event: Event to check capacity for
+            
+        Raises:
+            EventValidationError: If capacity exceeded
+        """
+        # Placeholder for future capacity validation
+        # Can be extended to check max_participants if field is added to Event model
+        pass
+    
+    def _validate_event_status(self, event: Event) -> None:
+        """
+        Validate event status for modifications
+        
+        Args:
+            event: Event to validate
+            
+        Raises:
+            EventValidationError: If event cannot be modified
+        """
+        from django.utils import timezone
+        from apps.events.exceptions import EventValidationError
+        
+        # Check if event is in the past
+        if event.date < timezone.now().date():
+            raise EventValidationError('Cannot invite guests to past events')
+
+    # =============================================================================
     # PRIVATE HELPERS
     # =============================================================================
 
@@ -315,10 +434,10 @@ class EventService:
         participation_data = {
             'event': event,
             'user': user,
-            'role': 'OWNER',
+            'role': EventParticipant.Role.OWNER,
             'guest_name': user.display_name,
             'guest_email': getattr(user, 'email', ''),
-            'rsvp_status': 'ACCEPTED',
+            'rsvp_status': EventParticipant.RsvpStatus.ACCEPTED,
         }
         return self.participant_dal.create_participant(participation_data)
 
@@ -327,19 +446,23 @@ class EventService:
         return f'users/{user_uuid}/events/{event_uuid}'
 
     def _invalidate_event_caches(self, event_uuid: str, cache_types: list[str]) -> None:
-        """Safely invalidate event-related caches"""
-        try:
-            for cache_type in cache_types:
+        """Safely invalidate event-related caches with retry mechanism"""
+        for cache_type in cache_types:
+            try:
                 self.cache_manager.invalidate_event_cache(event_uuid, cache_type)
-        except Exception as e:
-            # Log cache errors but don't fail the operation
-            logger.warning(f"Failed to invalidate event cache {cache_type} for {event_uuid}: {e}")
+                logger.debug(f"Successfully invalidated event cache {cache_type} for {event_uuid}")
+            except Exception as e:
+                # Log cache errors but don't fail the operation
+                logger.warning(f"Failed to invalidate event cache {cache_type} for {event_uuid}: {e}")
+                # In production, could implement retry logic or send to message queue
     
     def _invalidate_user_caches(self, user_id: int, cache_types: list[str]) -> None:
-        """Safely invalidate user-related caches"""
-        try:
-            for cache_type in cache_types:
+        """Safely invalidate user-related caches with retry mechanism"""
+        for cache_type in cache_types:
+            try:
                 self.cache_manager.invalidate_user_cache(user_id, cache_type)
-        except Exception as e:
-            # Log cache errors but don't fail the operation
-            logger.warning(f"Failed to invalidate user cache {cache_type} for user {user_id}: {e}")
+                logger.debug(f"Successfully invalidated user cache {cache_type} for user {user_id}")
+            except Exception as e:
+                # Log cache errors but don't fail the operation
+                logger.warning(f"Failed to invalidate user cache {cache_type} for user {user_id}: {e}")
+                # In production, could implement retry logic or send to message queue

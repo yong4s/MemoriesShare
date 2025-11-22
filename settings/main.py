@@ -38,6 +38,8 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'apps.shared.auth.authentication.CsrfExemptSessionAuthentication',
     ],
+    # Enterprise Error Handling - translates business exceptions to HTTP responses
+    'EXCEPTION_HANDLER': 'apps.shared.exceptions.api_handler.custom_exception_handler',
 }
 
 AUTH_USER_MODEL = 'accounts.CustomUser'

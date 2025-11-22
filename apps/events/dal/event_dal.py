@@ -2,34 +2,63 @@ from typing import Any, Dict, List
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.utils import timezone
+from django.db import DatabaseError, IntegrityError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
 
 from apps.events.models.event import Event
-# Removed cache decorators - using simple direct caching in services
+from apps.events.exceptions import EventNotFoundError, EventCreationError
+from apps.shared.exceptions import ServiceUnavailableError, ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EventDAL:
     """Data Access Layer for Event model operations only"""
 
     def create_event(self, event_data: dict[str, Any]) -> Event:
-        """Create new event"""
-        return Event.objects.create(**event_data)
+        """Create new event with exception translation"""
+        try:
+            return Event.objects.create(**event_data)
+        except (IntegrityError, DjangoValidationError) as e:
+            logger.error(f"Event creation failed - validation/integrity error: {e}")
+            raise ValidationError(f"Event creation failed: {str(e)}")
+        except DatabaseError as e:
+            logger.error(f"Event creation failed - database error: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Event creation failed - unexpected error: {e}")
+            raise EventCreationError(f"Unexpected error during event creation: {str(e)}")
 
-    def get_event_by_uuid(self, event_uuid: str) -> Event | None:
-        """Get event by UUID"""
+    def get_event_by_uuid(self, event_uuid: str) -> Event:
+        """Get event by UUID with exception translation"""
         try:
             return Event.objects.get(event_uuid=event_uuid)
         except Event.DoesNotExist:
-            return None
+            logger.debug(f"Event not found: {event_uuid}")
+            raise EventNotFoundError(event_identifier=event_uuid)
+        except DatabaseError as e:
+            logger.error(f"Database error while fetching event {event_uuid}: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error while fetching event {event_uuid}: {e}")
+            raise ServiceUnavailableError(f"Unexpected database error: {str(e)}")
 
-    # Cache removed - using simple direct approach  
-    def get_event_by_uuid_optimized(self, event_uuid: str) -> Event | None:
-        """Get event with optimized queries for related data"""
+    def get_event_by_uuid_optimized(self, event_uuid: str) -> Event:
+        """Get event with optimized queries and exception translation"""
         try:
             return Event.objects.select_related().prefetch_related(
                 'participants_through__user'
             ).get(event_uuid=event_uuid)
         except Event.DoesNotExist:
-            return None
+            logger.debug(f"Event not found (optimized query): {event_uuid}")
+            raise EventNotFoundError(event_identifier=event_uuid)
+        except DatabaseError as e:
+            logger.error(f"Database error in optimized event query {event_uuid}: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error in optimized event query {event_uuid}: {e}")
+            raise ServiceUnavailableError(f"Unexpected database error: {str(e)}")
 
     def get_user_events_paginated(self, user_id: int, filters: dict[str, Any]) -> dict[str, Any]:
         """Get paginated list of user's events"""
@@ -74,16 +103,36 @@ class EventDAL:
         }
 
     def update_event(self, event: Event, validated_data: dict[str, Any]) -> Event:
-        """Update event fields"""
-        for field, value in validated_data.items():
-            setattr(event, field, value)
-        event.save()
-        return event
+        """Update event fields with exception translation"""
+        try:
+            for field, value in validated_data.items():
+                setattr(event, field, value)
+            event.save()
+            return event
+        except (IntegrityError, DjangoValidationError) as e:
+            logger.error(f"Event update failed - validation error: {e}")
+            raise ValidationError(f"Event update validation failed: {str(e)}")
+        except DatabaseError as e:
+            logger.error(f"Event update failed - database error: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Event update failed - unexpected error: {e}")
+            raise ServiceUnavailableError(f"Unexpected error during event update: {str(e)}")
 
     def delete_event(self, event: Event) -> bool:
-        """Delete event"""
-        event.delete()
-        return True
+        """Delete event with exception translation"""
+        try:
+            event.delete()
+            return True
+        except IntegrityError as e:
+            logger.error(f"Event deletion failed - integrity constraint: {e}")
+            raise ValidationError(f"Cannot delete event due to existing references: {str(e)}")
+        except DatabaseError as e:
+            logger.error(f"Event deletion failed - database error: {e}")
+            raise ServiceUnavailableError(f"Database service unavailable: {str(e)}")
+        except Exception as e:
+            logger.error(f"Event deletion failed - unexpected error: {e}")
+            raise ServiceUnavailableError(f"Unexpected error during event deletion: {str(e)}")
 
     def get_events_with_statistics(self, event_ids: List[int]):
         """Get events with statistics for multiple IDs"""

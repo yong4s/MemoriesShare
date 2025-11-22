@@ -289,9 +289,17 @@ class EventBulkGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
                 )
 
                 invited_participants.append(participation)
+                logger.debug(f'Successfully invited guest {guest_data["guest_name"]} to event {event_uuid}')
 
             except Exception as e:
-                failed_invitations.append({'guest_name': guest_data['guest_name'], 'error': str(e)})
+                # All business exceptions are now handled consistently by our global handler
+                # Just log the specific guest invitation failure and continue with next guest
+                failed_invitations.append({
+                    'guest_name': guest_data['guest_name'],
+                    'error_type': getattr(e, 'error_code', type(e).__name__),
+                    'error': str(e)
+                })
+                logger.warning(f'Guest invitation failed for {guest_data["guest_name"]}: {e}')
 
         success_serializer = EventParticipantListSerializer(invited_participants, many=True)
 
@@ -302,8 +310,21 @@ class EventBulkGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
             'failed_invitations': failed_invitations,
         }
 
-        logger.info(f'Bulk invited {len(invited_participants)} guests to event {event_uuid}')
-        return Response(response_data, status=status.HTTP_200_OK)
+        # Use appropriate status code based on results
+        if len(invited_participants) > 0 and len(failed_invitations) == 0:
+            # All successful
+            status_code = status.HTTP_201_CREATED
+            logger.info(f'Bulk invited all {len(invited_participants)} guests to event {event_uuid}')
+        elif len(invited_participants) > 0:
+            # Partial success
+            status_code = status.HTTP_207_MULTI_STATUS
+            logger.info(f'Bulk invited {len(invited_participants)}/{len(invited_participants)+len(failed_invitations)} guests to event {event_uuid}')
+        else:
+            # All failed
+            status_code = status.HTTP_400_BAD_REQUEST
+            logger.warning(f'Failed to invite any guests to event {event_uuid}')
+
+        return Response(response_data, status=status_code)
 
 
 # =============================================================================

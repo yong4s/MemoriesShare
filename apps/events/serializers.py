@@ -52,7 +52,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
     not_attending_count = serializers.IntegerField(read_only=True)
     maybe_count = serializers.IntegerField(read_only=True)
     pending_count = serializers.IntegerField(read_only=True)
-
+    
     class Meta:
         model = Event
         fields = [
@@ -87,22 +87,85 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'maybe_count',
             'pending_count',
         ]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache owner data to prevent N+1 queries
+        self._owner_cache = {}
+    
+    def to_representation(self, instance):
+        """Override to optimize owner data fetching"""
+        # Pre-fetch owner data for all instances to prevent N+1
+        if hasattr(self, 'parent') and self.parent and hasattr(self.parent, 'instance'):
+            # This is part of a many=True serialization
+            self._prefetch_owners_for_queryset()
+        elif hasattr(instance, '_prefetched_objects_cache'):
+            # Single instance with prefetch
+            self._cache_owner_for_instance(instance)
+        
+        return super().to_representation(instance)
+    
+    def _prefetch_owners_for_queryset(self):
+        """Pre-fetch owner data for multiple instances to prevent N+1"""
+        if hasattr(self, '_owners_prefetched'):
+            return
+            
+        instances = self.parent.instance if hasattr(self.parent, 'instance') else []
+        if not instances:
+            return
+            
+        # Get all event IDs
+        event_ids = [instance.id for instance in instances if hasattr(instance, 'id')]
+        if not event_ids:
+            return
+            
+        # Fetch all owners in one query
+        from apps.events.models.event_participant import EventParticipant
+        owners = EventParticipant.objects.filter(
+            event_id__in=event_ids,
+            role=EventParticipant.Role.OWNER
+        ).select_related('user', 'event')
+        
+        # Cache owners by event_id
+        for owner in owners:
+            self._owner_cache[owner.event_id] = owner
+            
+        self._owners_prefetched = True
+    
+    def _cache_owner_for_instance(self, instance):
+        """Cache owner for single instance"""
+        if instance.id not in self._owner_cache:
+            try:
+                owner = instance.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
+                self._owner_cache[instance.id] = owner
+            except Exception:
+                self._owner_cache[instance.id] = None
 
     def get_owner_name(self, obj):
-        """Get owner name from EventParticipant"""
-        try:
-            owner = obj.eventparticipant_set.filter(role='OWNER').first()
-            return owner.user.display_name if owner else 'No Owner'
-        except Exception:
-            return 'Unknown'
+        """Get owner name from cached EventParticipant"""
+        owner = self._owner_cache.get(obj.id)
+        if owner is None:
+            # Fallback for single instance without prefetch
+            try:
+                owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
+                self._owner_cache[obj.id] = owner
+            except Exception:
+                return 'Unknown'
+        
+        return owner.user.display_name if owner and owner.user else 'No Owner'
 
     def get_owner_email(self, obj):
-        """Get owner email from EventParticipant"""
-        try:
-            owner = obj.eventparticipant_set.filter(role='OWNER').first()
-            return owner.user.email if owner else ''
-        except Exception:
-            return ''
+        """Get owner email from cached EventParticipant"""
+        owner = self._owner_cache.get(obj.id)
+        if owner is None:
+            # Fallback for single instance without prefetch
+            try:
+                owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
+                self._owner_cache[obj.id] = owner
+            except Exception:
+                return ''
+        
+        return owner.user.email if owner and owner.user else ''
 
 
 class EventListSerializer(serializers.ModelSerializer):
@@ -129,14 +192,69 @@ class EventListSerializer(serializers.ModelSerializer):
             'attending_count',
         ]
         read_only_fields = fields
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache owner data to prevent N+1 queries
+        self._owner_cache = {}
+    
+    def to_representation(self, instance):
+        """Override to optimize owner data fetching"""
+        if isinstance(self.instance, list) and not hasattr(self, '_owners_prefetched'):
+            self._prefetch_owners_for_list()
+        elif hasattr(instance, '_prefetched_objects_cache'):
+            self._cache_owner_for_instance(instance)
+        
+        return super().to_representation(instance)
+    
+    def _prefetch_owners_for_list(self):
+        """Pre-fetch owner data for list view to prevent N+1"""
+        if hasattr(self, '_owners_prefetched'):
+            return
+            
+        instances = self.instance if isinstance(self.instance, list) else []
+        if not instances:
+            return
+            
+        # Get all event IDs
+        event_ids = [instance.id for instance in instances if hasattr(instance, 'id')]
+        if not event_ids:
+            return
+            
+        # Fetch all owners in one query
+        from apps.events.models.event_participant import EventParticipant
+        owners = EventParticipant.objects.filter(
+            event_id__in=event_ids,
+            role=EventParticipant.Role.OWNER
+        ).select_related('user')
+        
+        # Cache owners by event_id
+        for owner in owners:
+            self._owner_cache[owner.event_id] = owner
+            
+        self._owners_prefetched = True
+    
+    def _cache_owner_for_instance(self, instance):
+        """Cache owner for single instance"""
+        if instance.id not in self._owner_cache:
+            try:
+                owner = instance.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
+                self._owner_cache[instance.id] = owner
+            except Exception:
+                self._owner_cache[instance.id] = None
 
     def get_owner_name(self, obj):
-        """Get owner name from EventParticipant"""
-        try:
-            owner = obj.eventparticipant_set.filter(role='OWNER').first()
-            return owner.user.display_name if owner else 'No Owner'
-        except Exception:
-            return 'Unknown'
+        """Get owner name from cached EventParticipant"""
+        owner = self._owner_cache.get(obj.id)
+        if owner is None:
+            # Fallback for single instance without prefetch
+            try:
+                owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
+                self._owner_cache[obj.id] = owner
+            except Exception:
+                return 'Unknown'
+        
+        return owner.user.display_name if owner and owner.user else 'No Owner'
 
 
 class EventUpdateSerializer(serializers.ModelSerializer):
@@ -174,10 +292,11 @@ class EventCreatedResponseSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_owner_name(self, obj):
-        """Get owner name from EventParticipant"""
+        """Get owner name from EventParticipant - optimized version"""
         try:
-            owner = obj.eventparticipant_set.filter(role='OWNER').first()
-            return owner.user.display_name if owner else 'No Owner'
+            # Use select_related for single query optimization
+            owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
+            return owner.user.display_name if owner and owner.user else 'No Owner'
         except Exception:
             return 'Unknown'
 

@@ -2,11 +2,13 @@ import logging
 from typing import Any
 from typing import Dict
 
-from rest_framework.exceptions import PermissionDenied
+from apps.shared.exceptions import PermissionError
+from apps.events.exceptions import EventPermissionError
 
 from apps.accounts.services import UserService
 from apps.events.dal.event_dal import EventDAL
 from apps.events.dal.event_participant_dal import EventParticipantDAL
+from apps.events.models.event_participant import EventParticipant
 from apps.shared.interfaces.permission_interface import IPermissionValidator
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ class EventPermissionService(IPermissionValidator):
         """Validate event access"""
         if not user_id:
             logger.warning('Access attempt without user ID')
-            raise PermissionDenied('User authentication required')
+            raise EventPermissionError(action=required_permission)
 
         has_permission = self._check_permission(event, user_id, required_permission)
 
@@ -36,7 +38,7 @@ class EventPermissionService(IPermissionValidator):
             logger.warning(
                 f'Permission denied for user {user_id}, event {event.event_uuid}, permission {required_permission}'
             )
-            raise PermissionDenied('You do not have permission to access this event')
+            raise EventPermissionError(action=required_permission, event_id=str(event.event_uuid))
 
         return True
 
@@ -64,7 +66,7 @@ class EventPermissionService(IPermissionValidator):
         """Legacy validation method - use validate_owner_access instead"""
         if not self.is_event_owner(event, user_id):
             logger.warning(f'User {user_id} tried to access event {event.id} without ownership')
-            raise PermissionDenied('You do not have permission to access this event')
+            raise EventPermissionError(action="ownership", event_id=str(event.event_uuid))
 
     # =============================================================================
     # PERMISSION CHECKING (boolean returns)
@@ -75,7 +77,7 @@ class EventPermissionService(IPermissionValidator):
         if not event or not user_id:
             return False
         participation = self.participant_dal.get_user_participation_by_id(event, user_id)
-        return participation and participation.role == 'OWNER'
+        return participation and participation.role == EventParticipant.Role.OWNER
 
     def is_event_guest(self, event, user_id):
         """Check if user is event guest"""
@@ -109,7 +111,7 @@ class EventPermissionService(IPermissionValidator):
 
             return True
 
-        except PermissionDenied:
+        except (EventPermissionError, PermissionError):
             return False
 
     def can_delete_event(self, event, user_id):
@@ -117,7 +119,7 @@ class EventPermissionService(IPermissionValidator):
         try:
             self.validate_owner_access(event, user_id)
             return True
-        except PermissionDenied:
+        except (EventPermissionError, PermissionError):
             return False
 
     def can_access_file(self, event, user_id, s3_key):
@@ -131,7 +133,7 @@ class EventPermissionService(IPermissionValidator):
 
             return True
 
-        except PermissionDenied:
+        except (EventPermissionError, PermissionError):
             return False
 
     # =============================================================================
@@ -183,7 +185,7 @@ class EventPermissionService(IPermissionValidator):
 
         # Check if user is moderator
         participation = self.participant_dal.get_user_participation_by_id(event, user_id)
-        return participation and participation.role == 'MODERATOR'
+        return participation and participation.role == EventParticipant.Role.MODERATOR
 
     def get_user_participation_in_event(self, event, user) -> Any | None:
         """Get user's participation in event"""
