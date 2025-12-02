@@ -13,6 +13,7 @@ from apps.events.permissions import (
     IsEventOwnerOrModerator,
     IsEventParticipant,
 )
+from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
 from apps.events.serializers import (
     BulkGuestInviteSerializer,
     EventCreatedResponseSerializer,
@@ -380,7 +381,6 @@ class EventAnalyticsAPIView(BaseEventAPIView, EventPermissionMixin):
         """Get event analytics and statistics"""
         event = self.get_event_service().get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
         
-        from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
         analytics_dal = EventAnalyticsDAL()
         
         # Get event statistics
@@ -420,7 +420,6 @@ class UserEventAnalyticsAPIView(BaseEventAPIView):
 
     def get(self, request):
         """Get user's event participation analytics"""
-        from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
         analytics_dal = EventAnalyticsDAL()
         
         # Get user participation statistics
@@ -433,7 +432,6 @@ class UserEventAnalyticsAPIView(BaseEventAPIView):
         upcoming_events = analytics_dal.get_upcoming_events(request.user.id, limit=5)
         
         # Serialize events
-        from apps.events.serializers import EventListSerializer
         recent_serializer = EventListSerializer(recent_events, many=True)
         upcoming_serializer = EventListSerializer(upcoming_events, many=True)
         

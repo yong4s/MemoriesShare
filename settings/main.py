@@ -72,20 +72,11 @@ if 'test' in sys.argv:  # noqa: SIM108
 else:
     ENVIRONMENT = env('ENVIRONMENT')
 
-# Redis Cache Configuration (will be overridden below after Celery config)
-
 # Testing environment optimizations  
 if ENVIRONMENT == TESTING_ENVIRONMENT:
     PASSWORD_HASHERS = [
         'django.contrib.auth.hashers.MD5PasswordHasher',
     ]
-    # Use in-memory cache for tests
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'test-cache',
-        }
-    }
 
 # CORS
 CORS_ALLOW_CREDENTIALS = True
@@ -330,3 +321,12 @@ CACHES = {
         'VERSION': 1,
     }
 }
+
+# Override cache for testing environment
+if ENVIRONMENT == TESTING_ENVIRONMENT:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test-cache',
+        }
+    }

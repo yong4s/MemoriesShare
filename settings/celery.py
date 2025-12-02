@@ -1,5 +1,3 @@
-"""Celery configuration for media_flow project."""
-
 import os
 from celery import Celery
 from django.conf import settings
