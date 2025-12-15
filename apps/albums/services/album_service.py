@@ -25,49 +25,57 @@ class AlbumService:
     def create_album(self, serializer, event, user_id):
         """Create album for event with permission validation and S3 integration."""
         if not user_id or not event:
-            logger.warning(f'Album creation attempt with invalid parameters: user_id={user_id}, event={event}')
-            raise PermissionDenied('You do not have permission to add albums to this event.')
+            logger.warning(
+                f"Album creation attempt with invalid parameters: user_id={user_id}, event={event}"
+            )
+            raise PermissionDenied(
+                "You do not have permission to add albums to this event."
+            )
 
         try:
             user = get_user_by_id(user_id)
         except InvalidUserIdError:
-            logger.error(f'Invalid user ID provided for album creation: {user_id}')
+            logger.error(f"Invalid user ID provided for album creation: {user_id}")
             raise
 
         # Check if user is event owner
         if event.user_id != user_id:
-            logger.warning(f'User {user_id} attempted to create album for event {event.id} without ownership')
-            raise PermissionDenied('Only event owner can create albums.')
+            logger.warning(
+                f"User {user_id} attempted to create album for event {event.id} without ownership"
+            )
+            raise PermissionDenied("Only event owner can create albums.")
 
         # Create album object without saving to DB first
         album = Album(
             event=event,
-            name=serializer.validated_data['name'],
-            description=serializer.validated_data.get('description', ''),
-            is_public=serializer.validated_data.get('is_public', False),
+            name=serializer.validated_data["name"],
+            description=serializer.validated_data.get("description", ""),
+            is_public=serializer.validated_data.get("is_public", False),
         )
 
         # Generate S3 prefix before saving: users/{user_uuid}/events/{event_uuid}/albums/{album_uuid}
-        album_folder_name = f'users/{user.user_uuid}/events/{event.event_uuid}/albums/{album.album_uuid}'
+        album_folder_name = f"users/{user.user_uuid}/events/{event.event_uuid}/albums/{album.album_uuid}"
         album.album_s3_prefix = album_folder_name
 
         try:
-            logger.info(f'Creating S3 folder: {album_folder_name}')
+            logger.info(f"Creating S3 folder: {album_folder_name}")
             result = self.s3service.create_folder(album_folder_name)
-            logger.info(f'S3 folder creation result: {result}')
+            logger.info(f"S3 folder creation result: {result}")
 
             # Check if result contains error
-            if 'Error' in str(result):
-                raise Exception(f'S3 folder creation failed: {result}')
+            if "Error" in str(result):
+                raise Exception(f"S3 folder creation failed: {result}")
 
             # Save to DB only AFTER successful S3 folder creation
             album.save()
-            logger.info(f'Album {album.album_uuid} created successfully with S3 prefix: {album_folder_name}')
+            logger.info(
+                f"Album {album.album_uuid} created successfully with S3 prefix: {album_folder_name}"
+            )
 
         except Exception as e:
             # S3 folder creation failed - don't save to DB at all
-            logger.error(f'Failed to create S3 folder for album: {e!s}')
-            raise S3ServiceError(f'Failed to create album folder: {e!s}')
+            logger.error(f"Failed to create S3 folder for album: {e!s}")
+            raise S3ServiceError(f"Failed to create album folder: {e!s}")
 
         return album
 
@@ -75,15 +83,21 @@ class AlbumService:
         album = self.dal.get_album_by_id(album_id)
 
         if not self._is_owner_or_guest(album.event_id, user_id):
-            logger.warning(f'User {user_id} attempted to access album {album_id} without permission')
-            raise PermissionDenied('You do not have permission to view this album.')
+            logger.warning(
+                f"User {user_id} attempted to access album {album_id} without permission"
+            )
+            raise PermissionDenied("You do not have permission to view this album.")
 
         return album
 
     def get_albums_for_event(self, user_id, event_id):
         if not self._is_owner_or_guest(event_id, user_id):
-            logger.warning(f'User {user_id} attempted to access albums for event {event_id} without permission')
-            raise PermissionDenied('You do not have permission to view albums for this event.')
+            logger.warning(
+                f"User {user_id} attempted to access albums for event {event_id} without permission"
+            )
+            raise PermissionDenied(
+                "You do not have permission to view albums for this event."
+            )
 
         return self.dal.get_all_event_albums(event_id)
 
@@ -93,8 +107,10 @@ class AlbumService:
 
         # Check if user is event owner
         if album.event.user_id != user_id:
-            logger.warning(f'User {user_id} attempted to update album {album_id} without ownership')
-            raise PermissionDenied('Only event owner can update albums.')
+            logger.warning(
+                f"User {user_id} attempted to update album {album_id} without ownership"
+            )
+            raise PermissionDenied("Only event owner can update albums.")
 
         # Update album fields
         for field, value in album_data.items():
@@ -102,7 +118,7 @@ class AlbumService:
                 setattr(album, field, value)
 
         album.save()
-        logger.info(f'Album {album_id} updated successfully by user {user_id}')
+        logger.info(f"Album {album_id} updated successfully by user {user_id}")
 
         return album
 
@@ -112,24 +128,28 @@ class AlbumService:
 
         # Check if user is event owner
         if album.event.user_id != user_id:
-            logger.warning(f'User {user_id} attempted to delete album {album_id} without ownership')
-            raise PermissionDenied('You do not have permission to delete albums for this event.')
+            logger.warning(
+                f"User {user_id} attempted to delete album {album_id} without ownership"
+            )
+            raise PermissionDenied(
+                "You do not have permission to delete albums for this event."
+            )
 
         album_folder_url = album.album_s3_prefix
 
         try:
             # First delete S3 structure
             if album_folder_url:
-                logger.info(f'Deleting S3 folder: {album_folder_url}')
+                logger.info(f"Deleting S3 folder: {album_folder_url}")
                 self.s3service.delete_folder(album_folder_url)
-                logger.info(f'S3 folder deleted successfully: {album_folder_url}')
+                logger.info(f"S3 folder deleted successfully: {album_folder_url}")
         except Exception as e:
-            logger.error(f'Failed to delete S3 folder for album {album_id}: {e!s}')
-            raise S3ServiceError(f'Failed to delete album folder: {e!s}')
+            logger.error(f"Failed to delete S3 folder for album {album_id}: {e!s}")
+            raise S3ServiceError(f"Failed to delete album folder: {e!s}")
 
         # Then delete from DB
         result = self.dal.delete_album(album_id)
-        logger.info(f'Album {album_id} deleted successfully by user {user_id}')
+        logger.info(f"Album {album_id} deleted successfully by user {user_id}")
 
         return result
 
@@ -140,7 +160,7 @@ class AlbumService:
             albums = self.dal.get_all_event_albums(event_id)
             if not albums:
                 return False
-            
+
             # Check if user is event owner through album's event relationship
             return albums[0].event.user_id == user_id
         except:
@@ -154,11 +174,11 @@ class AlbumService:
         stats = self.dal.get_album_statistics(album_id)
 
         return {
-            'album_id': album_id,
-            'album_name': album.name,
-            'total_files': stats.get('file_count', 0),
-            'total_size_bytes': stats.get('total_size', 0),
-            'created_at': album.created_at,
-            'last_modified': album.updated_at,
-            'is_public': album.is_public,
+            "album_id": album_id,
+            "album_name": album.name,
+            "total_files": stats.get("file_count", 0),
+            "total_size_bytes": stats.get("total_size", 0),
+            "created_at": album.created_at,
+            "last_modified": album.updated_at,
+            "is_public": album.is_public,
         }

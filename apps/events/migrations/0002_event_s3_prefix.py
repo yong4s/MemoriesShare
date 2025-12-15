@@ -6,15 +6,18 @@ from django.db import models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('events', '0001_initial'),
+        ("events", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='event',
-            name='s3_prefix',
+            model_name="event",
+            name="s3_prefix",
             field=models.CharField(
-                blank=True, help_text='S3 folder path for event files', max_length=500, verbose_name='S3 Prefix'
+                blank=True,
+                help_text="S3 folder path for event files",
+                max_length=500,
+                verbose_name="S3 Prefix",
             ),
         ),
     ]

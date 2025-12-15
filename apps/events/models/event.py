@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -8,21 +10,42 @@ from apps.shared.base.models import BaseModel
 
 
 class EventQuerySet(models.QuerySet):
-    """Optimized QuerySet for events with annotations"""
+    """Optimized QuerySet for events with annotations and filtering"""
 
     def for_user(self, user_id):
         """Events where user is a participant"""
         return self.filter(participants=user_id).distinct()
 
+    def for_owner(self, user_id):
+        """Events owned by specific user"""
+        return self.filter(user_id=user_id)
+
+    def accessible_to_user(self, user_id):
+        """All events accessible to user (owned, participating, or public)"""
+        return self.filter(
+            models.Q(user_id=user_id)  # Own events
+            | models.Q(participants=user_id)  # Participant in other events
+            | models.Q(is_public=True)  # Public events
+        ).distinct()
+
+    def search(self, search_term):
+        """Apply search filter to events"""
+        if not search_term:
+            return self
+        return self.filter(
+            models.Q(event_name__icontains=search_term)
+            | models.Q(description__icontains=search_term)
+        )
+
     def with_statistics(self):
         """Add participant statistics via annotations"""
         from django.apps import apps
 
-        EventParticipant = apps.get_model('events', 'EventParticipant')
+        EventParticipant = apps.get_model("events", "EventParticipant")
         return self.annotate(
-            total_participants=models.Count('participants_through'),
+            total_participants=models.Count("participants_through"),
             attending_count=models.Count(
-                'participants_through',
+                "participants_through",
                 filter=models.Q(
                     participants_through__rsvp_status__in=[
                         EventParticipant.RsvpStatus.ACCEPTED,
@@ -33,11 +56,13 @@ class EventQuerySet(models.QuerySet):
                 ),
             ),
             not_attending_count=models.Count(
-                'participants_through',
-                filter=models.Q(participants_through__rsvp_status=EventParticipant.RsvpStatus.DECLINED),
+                "participants_through",
+                filter=models.Q(
+                    participants_through__rsvp_status=EventParticipant.RsvpStatus.DECLINED
+                ),
             ),
             maybe_count=models.Count(
-                'participants_through',
+                "participants_through",
                 filter=models.Q(
                     participants_through__rsvp_status__in=[
                         EventParticipant.RsvpStatus.MAYBE,
@@ -46,9 +71,21 @@ class EventQuerySet(models.QuerySet):
                 ),
             ),
             pending_count=models.Count(
-                'participants_through',
-                filter=models.Q(participants_through__rsvp_status=EventParticipant.RsvpStatus.PENDING),
+                "participants_through",
+                filter=models.Q(
+                    participants_through__rsvp_status=EventParticipant.RsvpStatus.PENDING
+                ),
             ),
+        )
+
+    def with_statistics_ordered(self):
+        """Add statistics and default ordering"""
+        return self.with_statistics().order_by("-created_at")
+
+    def optimized(self):
+        """Apply standard optimizations for event queries"""
+        return self.select_related("user").prefetch_related(
+            "participants_through__user"
         )
 
     def upcoming(self):
@@ -69,8 +106,23 @@ class EventManager(models.Manager):
     def for_user(self, user_id):
         return self.get_queryset().for_user(user_id)
 
+    def for_owner(self, user_id):
+        return self.get_queryset().for_owner(user_id)
+
+    def accessible_to_user(self, user_id):
+        return self.get_queryset().accessible_to_user(user_id)
+
+    def search(self, search_term):
+        return self.get_queryset().search(search_term)
+
     def with_statistics(self):
         return self.get_queryset().with_statistics()
+
+    def with_statistics_ordered(self):
+        return self.get_queryset().with_statistics_ordered()
+
+    def optimized(self):
+        return self.get_queryset().optimized()
 
     def upcoming(self):
         return self.get_queryset().upcoming()
@@ -85,76 +137,87 @@ class Event(BaseModel):
     Business logic moved to EventService, queries optimized in EventQuerySet.
     """
 
-    # Core identification
-    event_uuid = models.UUIDField(_('Event UUID'), unique=True, editable=False, db_index=True)
-
-    event_name = models.CharField(_('Event Name'), max_length=255, db_index=True)
-
-    description = models.TextField(_('Description'), blank=True, default='')
-
-    # M2M relationship through EventParticipant
-    participants = models.ManyToManyField(
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        through='events.EventParticipant',
-        related_name='joined_events',
-        blank=True,
-        verbose_name=_('Participants'),
+        on_delete=models.CASCADE,
+        related_name="owned_events",
+        verbose_name=_("Event Owner"),
+        db_index=True,
     )
 
-    # Event timing
-    date = models.DateField(_('Event Date'), db_index=True)
+    event_uuid = models.UUIDField(
+        _("Event UUID"), unique=True, editable=False, db_index=True
+    )
 
-    time = models.TimeField(_('Event Time'), null=True, blank=True)
+    event_name = models.CharField(_("Event Name"), max_length=255, db_index=True)
 
-    all_day = models.BooleanField(_('All Day Event'), default=False)
+    description = models.TextField(_("Description"), blank=True, default="")
 
-    # Location
-    location = models.CharField(_('Location'), max_length=255, blank=True)
+    participants = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through="events.EventParticipant",
+        related_name="joined_events",
+        blank=True,
+        verbose_name=_("Participants"),
+    )
 
-    address = models.TextField(_('Address'), blank=True)
+    date = models.DateField(_("Event Date"), db_index=True)
 
-    # Event settings
-    is_public = models.BooleanField(_('Public Event'), default=False)
+    time = models.TimeField(_("Event Time"), null=True, blank=True)
 
-    # S3 storage
+    all_day = models.BooleanField(_("All Day Event"), default=False)
+
+    location = models.CharField(_("Location"), max_length=255, blank=True)
+
+    address = models.TextField(_("Address"), blank=True)
+
+    is_public = models.BooleanField(_("Public Event"), default=False)
+
     s3_prefix = models.CharField(
-        _('S3 Prefix'), max_length=500, blank=True, help_text=_('S3 folder path for event files')
+        _("S3 Prefix"),
+        max_length=500,
+        blank=True,
+        help_text=_("S3 folder path for event files"),
     )
 
     objects = EventManager()
 
     class Meta:
-        verbose_name = _('Event')
-        verbose_name_plural = _('Events')
-        ordering = ['-date', 'event_name']
+        verbose_name = _("Event")
+        verbose_name_plural = _("Events")
+        ordering = ["-date", "event_name"]
         indexes = [
-            models.Index(fields=['date', 'is_public']),
-            models.Index(fields=['event_uuid']),
+            models.Index(fields=["date", "is_public"]),
+            models.Index(fields=["event_uuid"]),
+            models.Index(fields=["user", "date"]),
+            models.Index(fields=["user", "is_public"]),
         ]
 
     def __str__(self):
-        return f'{self.event_name} ({self.date})'
+        return f"{self.event_name} ({self.date})"
 
     def clean(self):
-        """Basic field validation only"""
+        """Minimal validation for critical business rules only"""
         super().clean()
         errors = {}
 
-        if not self.event_name or len(self.event_name.strip()) < 3:
-            errors['event_name'] = _('Event name must be at least 3 characters')
-
-        if self.description and len(self.description.strip()) < 3:
-            errors['description'] = _('Description must be at least 3 characters')
-
-        # Only restrict past dates for new events, allow editing historical events
         if self._state.adding and self.date and self.date < timezone.now().date():
-            errors['date'] = _('Event date cannot be in the past')
-            
+            errors["date"] = _("Event date cannot be in the past")
+
         if errors:
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
-        """Clean data before saving"""
+        """Clean data and auto-generate UUID and S3 prefix"""
+        if not self.event_uuid:
+            self.event_uuid = uuid.uuid4()
+
+        if not self.s3_prefix and self.event_uuid:
+            if self.user_id and hasattr(self.user, "user_uuid"):
+                self.s3_prefix = f"users/{self.user.user_uuid}/events/{self.event_uuid}"
+            else:
+                self.s3_prefix = f"events/{self.event_uuid}"
+
         if self.event_name:
             self.event_name = self.event_name.strip()
         if self.description:

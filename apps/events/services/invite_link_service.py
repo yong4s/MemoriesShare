@@ -9,4 +9,3 @@ class InviteLinkService:
 
     def create_event_invite_link(self, event_uuid):
         event = self
-

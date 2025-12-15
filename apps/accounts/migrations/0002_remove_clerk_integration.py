@@ -5,16 +5,16 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('accounts', '0001_initial'),
+        ("accounts", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='customuser',
-            name='accounts_cu_clerk_i_72e6de_idx',
+            model_name="customuser",
+            name="accounts_cu_clerk_i_72e6de_idx",
         ),
         migrations.RemoveField(
-            model_name='customuser',
-            name='clerk_id',
+            model_name="customuser",
+            name="clerk_id",
         ),
     ]

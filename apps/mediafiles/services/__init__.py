@@ -10,5 +10,5 @@ from .mediafile_service import MediafileService
 
 # Експортуємо для зручності
 __all__ = [
-    'MediafileService',
+    "MediafileService",
 ]

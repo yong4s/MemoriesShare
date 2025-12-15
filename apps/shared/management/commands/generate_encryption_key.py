@@ -10,17 +10,23 @@ class Command(BaseCommand):
     Usage: python manage.py generate_encryption_key
     """
 
-    help = 'Generate a new encryption key for token encryption'
+    help = "Generate a new encryption key for token encryption"
 
     def handle(self, *args, **options):
         """Generate and display a new encryption key."""
         key = Fernet.generate_key()
-        key_string = key.decode('utf-8')
+        key_string = key.decode("utf-8")
 
-        self.stdout.write(self.style.SUCCESS(f'Generated encryption key: {key_string}'))
-
-        self.stdout.write(self.style.WARNING('IMPORTANT: Add this key to your environment variables as ENCRYPTION_KEY'))
+        self.stdout.write(self.style.SUCCESS(f"Generated encryption key: {key_string}"))
 
         self.stdout.write(
-            self.style.WARNING('Store this key securely - if you lose it, encrypted data cannot be recovered!')
+            self.style.WARNING(
+                "IMPORTANT: Add this key to your environment variables as ENCRYPTION_KEY"
+            )
+        )
+
+        self.stdout.write(
+            self.style.WARNING(
+                "Store this key securely - if you lose it, encrypted data cannot be recovered!"
+            )
         )

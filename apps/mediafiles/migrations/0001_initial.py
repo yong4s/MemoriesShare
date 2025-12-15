@@ -10,66 +10,76 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('albums', '0001_initial'),
+        ("albums", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MediaFile',
+            name="MediaFile",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('mediafilePK', models.AutoField(primary_key=True, serialize=False)),
-                ('file_type', models.CharField(max_length=255)),
-                ('S3_bucket_name', models.CharField(max_length=255)),
-                ('S3_object_key', models.CharField(max_length=255)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("mediafilePK", models.AutoField(primary_key=True, serialize=False)),
+                ("file_type", models.CharField(max_length=255)),
+                ("S3_bucket_name", models.CharField(max_length=255)),
+                ("S3_object_key", models.CharField(max_length=255)),
                 (
-                    'album_id',
+                    "album_id",
                     models.ForeignKey(
-                        db_column='album_id',
+                        db_column="album_id",
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name='mediafiles',
-                        to='albums.album',
+                        related_name="mediafiles",
+                        to="albums.album",
                     ),
                 ),
                 (
-                    'user_id',
+                    "user_id",
                     models.ForeignKey(
-                        db_column='user_id',
+                        db_column="user_id",
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name='mediafiles',
+                        related_name="mediafiles",
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='Download',
+            name="Download",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
                 (
-                    'user',
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "user",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name='downloads',
+                        related_name="downloads",
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
-                    'mediafile',
+                    "mediafile",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, related_name='downloads', to='mediafiles.mediafile'
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="downloads",
+                        to="mediafiles.mediafile",
                     ),
                 ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
     ]

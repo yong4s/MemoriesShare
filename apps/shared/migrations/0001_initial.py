@@ -15,69 +15,122 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='BlacklistedToken',
+            name="BlacklistedToken",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('jti', models.CharField(help_text='JWT ID (jti claim)', max_length=255, unique=True)),
                 (
-                    'token_type',
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "jti",
                     models.CharField(
-                        choices=[('access', 'Access Token'), ('refresh', 'Refresh Token')],
-                        default='access',
+                        help_text="JWT ID (jti claim)", max_length=255, unique=True
+                    ),
+                ),
+                (
+                    "token_type",
+                    models.CharField(
+                        choices=[
+                            ("access", "Access Token"),
+                            ("refresh", "Refresh Token"),
+                        ],
+                        default="access",
                         max_length=20,
                     ),
                 ),
-                ('expires_at', models.DateTimeField(help_text='When this token expires')),
                 (
-                    'blacklisted_at',
-                    models.DateTimeField(auto_now_add=True, help_text='When this token was blacklisted'),
+                    "expires_at",
+                    models.DateTimeField(help_text="When this token expires"),
                 ),
                 (
-                    'reason',
-                    models.CharField(
-                        default='logout', help_text='Reason for blacklisting (logout, security, etc.)', max_length=100
+                    "blacklisted_at",
+                    models.DateTimeField(
+                        auto_now_add=True, help_text="When this token was blacklisted"
                     ),
                 ),
                 (
-                    'user',
+                    "reason",
+                    models.CharField(
+                        default="logout",
+                        help_text="Reason for blacklisting (logout, security, etc.)",
+                        max_length=100,
+                    ),
+                ),
+                (
+                    "user",
                     models.ForeignKey(
-                        help_text='User who owns this token',
+                        help_text="User who owns this token",
                         on_delete=django.db.models.deletion.CASCADE,
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
             options={
-                'db_table': 'shared_blacklisted_tokens',
-                'indexes': [
-                    models.Index(fields=['jti'], name='shared_blac_jti_5aae43_idx'),
-                    models.Index(fields=['user', 'token_type'], name='shared_blac_user_id_701a5b_idx'),
-                    models.Index(fields=['expires_at'], name='shared_blac_expires_d344f0_idx'),
+                "db_table": "shared_blacklisted_tokens",
+                "indexes": [
+                    models.Index(fields=["jti"], name="shared_blac_jti_5aae43_idx"),
+                    models.Index(
+                        fields=["user", "token_type"],
+                        name="shared_blac_user_id_701a5b_idx",
+                    ),
+                    models.Index(
+                        fields=["expires_at"], name="shared_blac_expires_d344f0_idx"
+                    ),
                 ],
             },
         ),
         migrations.CreateModel(
-            name='UserSession',
+            name="UserSession",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('refresh_token_jti', models.CharField(max_length=255, unique=True)),
-                ('device_info', models.TextField(blank=True, help_text='User agent, IP, etc.')),
-                ('ip_address', models.GenericIPAddressField(blank=True, null=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('last_activity', models.DateTimeField(auto_now=True)),
-                ('expires_at', models.DateTimeField()),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("refresh_token_jti", models.CharField(max_length=255, unique=True)),
+                (
+                    "device_info",
+                    models.TextField(blank=True, help_text="User agent, IP, etc."),
+                ),
+                ("ip_address", models.GenericIPAddressField(blank=True, null=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("last_activity", models.DateTimeField(auto_now=True)),
+                ("expires_at", models.DateTimeField()),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'db_table': 'shared_user_sessions',
-                'indexes': [
-                    models.Index(fields=['user', 'is_active'], name='shared_user_user_id_e7df03_idx'),
-                    models.Index(fields=['refresh_token_jti'], name='shared_user_refresh_593b6c_idx'),
-                    models.Index(fields=['expires_at'], name='shared_user_expires_ee17da_idx'),
+                "db_table": "shared_user_sessions",
+                "indexes": [
+                    models.Index(
+                        fields=["user", "is_active"],
+                        name="shared_user_user_id_e7df03_idx",
+                    ),
+                    models.Index(
+                        fields=["refresh_token_jti"],
+                        name="shared_user_refresh_593b6c_idx",
+                    ),
+                    models.Index(
+                        fields=["expires_at"], name="shared_user_expires_ee17da_idx"
+                    ),
                 ],
             },
         ),

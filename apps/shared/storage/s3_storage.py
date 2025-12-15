@@ -22,7 +22,7 @@ class S3StorageService(AbstractStorageService):
 
     @property
     def provider_name(self) -> str:
-        return 's3'
+        return "s3"
 
     @property
     def supports_resumable_upload(self) -> bool:
@@ -33,12 +33,18 @@ class S3StorageService(AbstractStorageService):
         return 5 * 1024 * 1024 * 1024 * 1024  # 5TB для S3
 
     def generate_upload_url(
-        self, key: str, content_type: str = 'application/octet-stream', expires_in: int = 3600, **kwargs
+        self,
+        key: str,
+        content_type: str = "application/octet-stream",
+        expires_in: int = 3600,
+        **kwargs,
     ) -> str:
         """Генерує presigned URL для завантаження файлу в S3."""
         return self.s3_service.generate_upload_url(key, content_type, expires_in)
 
-    def generate_download_url(self, key: str, filename: str | None = None, expires_in: int = 3600, **kwargs) -> str:
+    def generate_download_url(
+        self, key: str, filename: str | None = None, expires_in: int = 3600, **kwargs
+    ) -> str:
         """Генерує presigned URL для скачування файлу з S3."""
         return self.s3_service.generate_download_url(key, filename, expires_in)
 
@@ -59,7 +65,7 @@ class S3StorageService(AbstractStorageService):
         try:
             return self.s3_service.delete_s3_object(key)
         except Exception as e:
-            logger.error(f'Error deleting S3 file {key}: {e}')
+            logger.error(f"Error deleting S3 file {key}: {e}")
             return False
 
     def list_files(self, prefix: str, limit: int = 100) -> list[dict]:

@@ -17,230 +17,292 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Event',
+            name="Event",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
                 (
-                    'event_uuid',
-                    models.UUIDField(
-                        db_index=True, default=uuid.uuid4, editable=False, unique=True, verbose_name='Event UUID'
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
-                ('event_name', models.CharField(db_index=True, max_length=255, verbose_name='Event Name')),
-                ('description', models.TextField(blank=True, default='', verbose_name='Description')),
-                ('date', models.DateField(db_index=True, verbose_name='Event Date')),
-                ('time', models.TimeField(blank=True, null=True, verbose_name='Event Time')),
-                ('all_day', models.BooleanField(default=False, verbose_name='All Day Event')),
-                ('location', models.CharField(blank=True, max_length=255, verbose_name='Location')),
-                ('address', models.TextField(blank=True, verbose_name='Address')),
-                ('is_public', models.BooleanField(default=False, verbose_name='Public Event')),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
                 (
-                    'user',
+                    "event_uuid",
+                    models.UUIDField(
+                        db_index=True,
+                        default=uuid.uuid4,
+                        editable=False,
+                        unique=True,
+                        verbose_name="Event UUID",
+                    ),
+                ),
+                (
+                    "event_name",
+                    models.CharField(
+                        db_index=True, max_length=255, verbose_name="Event Name"
+                    ),
+                ),
+                (
+                    "description",
+                    models.TextField(
+                        blank=True, default="", verbose_name="Description"
+                    ),
+                ),
+                ("date", models.DateField(db_index=True, verbose_name="Event Date")),
+                (
+                    "time",
+                    models.TimeField(blank=True, null=True, verbose_name="Event Time"),
+                ),
+                (
+                    "all_day",
+                    models.BooleanField(default=False, verbose_name="All Day Event"),
+                ),
+                (
+                    "location",
+                    models.CharField(
+                        blank=True, max_length=255, verbose_name="Location"
+                    ),
+                ),
+                ("address", models.TextField(blank=True, verbose_name="Address")),
+                (
+                    "is_public",
+                    models.BooleanField(default=False, verbose_name="Public Event"),
+                ),
+                (
+                    "user",
                     models.ForeignKey(
                         blank=True,
-                        help_text='Deprecated - use participants relationship',
+                        help_text="Deprecated - use participants relationship",
                         null=True,
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name='created_events',
+                        related_name="created_events",
                         to=settings.AUTH_USER_MODEL,
-                        verbose_name='Legacy Owner',
+                        verbose_name="Legacy Owner",
                     ),
                 ),
             ],
             options={
-                'verbose_name': 'Event',
-                'verbose_name_plural': 'Events',
-                'ordering': ['-date', 'event_name'],
+                "verbose_name": "Event",
+                "verbose_name_plural": "Events",
+                "ordering": ["-date", "event_name"],
             },
         ),
         migrations.CreateModel(
-            name='EventParticipant',
+            name="EventParticipant",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
                 (
-                    'role',
-                    models.CharField(
-                        choices=[('OWNER', 'Event Owner'), ('GUEST', 'Event Guest'), ('MODERATOR', 'Event Moderator')],
-                        db_index=True,
-                        default='GUEST',
-                        help_text='Role of the user in this event',
-                        max_length=10,
-                        verbose_name='Role',
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
                 (
-                    'rsvp_status',
+                    "role",
                     models.CharField(
                         choices=[
-                            ('accepted', 'Accepted'),
-                            ('declined', 'Declined'),
-                            ('pending', 'Pending'),
-                            ('tentative', 'Tentative'),
-                            ('canceled', 'Canceled'),
-                            ('no_show', 'No Show'),
-                            ('waitlisted', 'Waitlisted'),
-                            ('maybe', 'Maybe'),
-                            ('confirmed_plus_one', 'Confirmed +1'),
-                            ('declined_with_regret', 'Declined with Regret'),
+                            ("OWNER", "Event Owner"),
+                            ("GUEST", "Event Guest"),
+                            ("MODERATOR", "Event Moderator"),
                         ],
                         db_index=True,
-                        default='pending',
-                        help_text='Response status to event invitation',
-                        max_length=20,
-                        verbose_name='RSVP Status',
+                        default="GUEST",
+                        help_text="Role of the user in this event",
+                        max_length=10,
+                        verbose_name="Role",
                     ),
                 ),
                 (
-                    'guest_name',
+                    "rsvp_status",
+                    models.CharField(
+                        choices=[
+                            ("accepted", "Accepted"),
+                            ("declined", "Declined"),
+                            ("pending", "Pending"),
+                            ("tentative", "Tentative"),
+                            ("canceled", "Canceled"),
+                            ("no_show", "No Show"),
+                            ("waitlisted", "Waitlisted"),
+                            ("maybe", "Maybe"),
+                            ("confirmed_plus_one", "Confirmed +1"),
+                            ("declined_with_regret", "Declined with Regret"),
+                        ],
+                        db_index=True,
+                        default="pending",
+                        help_text="Response status to event invitation",
+                        max_length=20,
+                        verbose_name="RSVP Status",
+                    ),
+                ),
+                (
+                    "guest_name",
                     models.CharField(
                         blank=True,
-                        help_text='Display name for guest users in this event',
+                        help_text="Display name for guest users in this event",
                         max_length=255,
-                        verbose_name='Guest Display Name',
+                        verbose_name="Guest Display Name",
                     ),
                 ),
                 (
-                    'guest_email',
+                    "guest_email",
                     models.EmailField(
                         blank=True,
-                        help_text='Contact email for guest (not for authentication)',
+                        help_text="Contact email for guest (not for authentication)",
                         max_length=254,
                         null=True,
-                        verbose_name='Guest Contact Email',
+                        verbose_name="Guest Contact Email",
                     ),
                 ),
                 (
-                    'guest_phone',
+                    "guest_phone",
                     models.CharField(
                         blank=True,
-                        help_text='Phone number in format +XXXXXXXXXX',
+                        help_text="Phone number in format +XXXXXXXXXX",
                         max_length=15,
-                        verbose_name='Guest Phone',
+                        verbose_name="Guest Phone",
                     ),
                 ),
                 (
-                    'dietary_preferences',
+                    "dietary_preferences",
                     models.TextField(
                         blank=True,
-                        help_text='Special dietary preferences or restrictions',
-                        verbose_name='Dietary Preferences',
+                        help_text="Special dietary preferences or restrictions",
+                        verbose_name="Dietary Preferences",
                     ),
                 ),
                 (
-                    'invitation_sent_at',
+                    "invitation_sent_at",
                     models.DateTimeField(
                         blank=True,
-                        help_text='Date and time when invitation was sent',
+                        help_text="Date and time when invitation was sent",
                         null=True,
-                        verbose_name='Invitation Sent',
+                        verbose_name="Invitation Sent",
                     ),
                 ),
                 (
-                    'responded_at',
+                    "responded_at",
                     models.DateTimeField(
                         blank=True,
-                        help_text='Date and time when user responded to invitation',
+                        help_text="Date and time when user responded to invitation",
                         null=True,
-                        verbose_name='Response Date',
+                        verbose_name="Response Date",
                     ),
                 ),
                 (
-                    'invite_token_used',
+                    "invite_token_used",
                     models.CharField(
                         blank=True,
                         db_index=True,
-                        help_text='Token used to join this event',
+                        help_text="Token used to join this event",
                         max_length=64,
                         null=True,
-                        verbose_name='Invitation Token Used',
+                        verbose_name="Invitation Token Used",
                     ),
                 ),
                 (
-                    'join_method',
+                    "join_method",
                     models.CharField(
                         choices=[
-                            ('direct', 'Direct Addition'),
-                            ('invitation', 'Email Invitation'),
-                            ('qr_code', 'QR Code'),
-                            ('link', 'Event Link'),
+                            ("direct", "Direct Addition"),
+                            ("invitation", "Email Invitation"),
+                            ("qr_code", "QR Code"),
+                            ("link", "Event Link"),
                         ],
-                        default='direct',
-                        help_text='How the participant joined the event',
+                        default="direct",
+                        help_text="How the participant joined the event",
                         max_length=20,
-                        verbose_name='Join Method',
+                        verbose_name="Join Method",
                     ),
                 ),
                 (
-                    'event',
+                    "event",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name='participants_through',
-                        to='events.event',
-                        verbose_name='Event',
+                        related_name="participants_through",
+                        to="events.event",
+                        verbose_name="Event",
                     ),
                 ),
                 (
-                    'user',
+                    "user",
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name='event_participations',
+                        related_name="event_participations",
                         to=settings.AUTH_USER_MODEL,
-                        verbose_name='User',
+                        verbose_name="User",
                     ),
                 ),
             ],
             options={
-                'verbose_name': 'Event Participant',
-                'verbose_name_plural': 'Event Participants',
-                'db_table': 'events_eventparticipant',
-                'ordering': ['event', 'role', 'user__email'],
+                "verbose_name": "Event Participant",
+                "verbose_name_plural": "Event Participants",
+                "db_table": "events_eventparticipant",
+                "ordering": ["event", "role", "user__email"],
             },
         ),
         migrations.AddField(
-            model_name='event',
-            name='participants',
+            model_name="event",
+            name="participants",
             field=models.ManyToManyField(
                 blank=True,
-                related_name='joined_events',
-                through='events.EventParticipant',
+                related_name="joined_events",
+                through="events.EventParticipant",
                 to=settings.AUTH_USER_MODEL,
-                verbose_name='Participants',
+                verbose_name="Participants",
             ),
         ),
         migrations.AddIndex(
-            model_name='eventparticipant',
-            index=models.Index(fields=['event', 'role'], name='events_even_event_i_247748_idx'),
+            model_name="eventparticipant",
+            index=models.Index(
+                fields=["event", "role"], name="events_even_event_i_247748_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='eventparticipant',
-            index=models.Index(fields=['user', 'role'], name='events_even_user_id_f0cb53_idx'),
+            model_name="eventparticipant",
+            index=models.Index(
+                fields=["user", "role"], name="events_even_user_id_f0cb53_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='eventparticipant',
-            index=models.Index(fields=['event', 'rsvp_status'], name='events_even_event_i_a8e984_idx'),
+            model_name="eventparticipant",
+            index=models.Index(
+                fields=["event", "rsvp_status"], name="events_even_event_i_a8e984_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='eventparticipant',
-            index=models.Index(fields=['rsvp_status'], name='events_even_rsvp_st_e805d4_idx'),
+            model_name="eventparticipant",
+            index=models.Index(
+                fields=["rsvp_status"], name="events_even_rsvp_st_e805d4_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='eventparticipant',
-            index=models.Index(fields=['invite_token_used'], name='events_even_invite__e890c9_idx'),
+            model_name="eventparticipant",
+            index=models.Index(
+                fields=["invite_token_used"], name="events_even_invite__e890c9_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='eventparticipant',
-            unique_together={('event', 'user')},
+            name="eventparticipant",
+            unique_together={("event", "user")},
         ),
         migrations.AddIndex(
-            model_name='event',
-            index=models.Index(fields=['date', 'is_public'], name='events_even_date_b3456b_idx'),
+            model_name="event",
+            index=models.Index(
+                fields=["date", "is_public"], name="events_even_date_b3456b_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='event',
-            index=models.Index(fields=['event_uuid'], name='events_even_event_u_f52ed0_idx'),
+            model_name="event",
+            index=models.Index(
+                fields=["event_uuid"], name="events_even_event_u_f52ed0_idx"
+            ),
         ),
     ]

@@ -18,7 +18,7 @@ class AlbumQuerySet(models.QuerySet):
 
     def with_file_counts(self):
         """Додає кількість файлів до кожного альбому"""
-        return self.annotate(file_count=Count('mediafiles', distinct=True))
+        return self.annotate(file_count=Count("mediafiles", distinct=True))
 
     def public(self):
         """Повертає тільки публічні альбоми"""
@@ -30,36 +30,13 @@ class AlbumQuerySet(models.QuerySet):
 
     def with_recent_activity(self):
         """Додає оптимізовані prefetch запити"""
-        return self.select_related('event', 'event__user').prefetch_related('mediafiles')
+        return self.select_related("event", "event__user").prefetch_related(
+            "mediafiles"
+        )
 
     def for_user(self, user_id):
         """Повертає альбоми користувача (власні події)"""
         return self.filter(event__user_id=user_id)
-
-
-class AlbumManager(models.Manager):
-    """Кастомний менеджер для альбомів"""
-
-    def get_queryset(self):
-        return AlbumQuerySet(self.model, using=self._db)
-
-    def for_event(self, event_id):
-        return self.get_queryset().for_event(event_id)
-
-    def with_file_counts(self):
-        return self.get_queryset().with_file_counts()
-
-    def public(self):
-        return self.get_queryset().public()
-
-    def private(self):
-        return self.get_queryset().private()
-
-    def optimized(self):
-        return self.get_queryset().with_recent_activity().with_file_counts()
-
-    def for_user(self, user_id):
-        return self.get_queryset().for_user(user_id)
 
 
 class Album(BaseModel):
@@ -69,58 +46,71 @@ class Album(BaseModel):
     """
 
     event = models.ForeignKey(
-        'events.Event',
+        "events.Event",
         on_delete=models.CASCADE,
-        related_name='albums',
-        verbose_name=_('Подія'),
-        help_text=_('Подія, до якої належить альбом'),
+        related_name="albums",
+        verbose_name=_("Подія"),
+        help_text=_("Подія, до якої належить альбом"),
         db_index=True,  # Критично для performance
     )
     name = models.CharField(
-        _('Назва альбому'),
+        _("Назва альбому"),
         max_length=255,
-        help_text=_('Введіть назву альбому (не більше 255 символів)'),
+        help_text=_("Введіть назву альбому (не більше 255 символів)"),
         db_index=True,  # Індекс для пошуку за назвою
     )
     description = models.TextField(
-        _('Опис альбому'), max_length=500, blank=True, help_text=_('Додайте опис альбому (не більше 500 символів)')
+        _("Опис альбому"),
+        max_length=500,
+        blank=True,
+        help_text=_("Додайте опис альбому (не більше 500 символів)"),
     )
     album_uuid = models.UUIDField(
-        _('UUID альбому'),
+        _("UUID альбому"),
         default=uuid.uuid4,
         editable=False,
         unique=True,
         db_index=True,  # Індекс для API calls
     )
     album_s3_prefix = models.CharField(
-        _('S3 Prefix'), max_length=500, unique=True, help_text=_('S3 шлях для зберігання файлів альбому')
+        _("S3 Prefix"),
+        max_length=500,
+        unique=True,
+        help_text=_("S3 шлях для зберігання файлів альбому"),
     )
     is_public = models.BooleanField(
-        _('Публічний альбом'), default=False, help_text=_('Чи є альбом публічним для перегляду')
+        _("Публічний альбом"),
+        default=False,
+        help_text=_("Чи є альбом публічним для перегляду"),
     )
     cover_image_s3_key = models.CharField(
-        _('Обкладинка альбому'), max_length=500, blank=True, help_text=_('S3 ключ для обкладинки альбому')
+        _("Обкладинка альбому"),
+        max_length=500,
+        blank=True,
+        help_text=_("S3 ключ для обкладинки альбому"),
     )
     sort_order = models.PositiveIntegerField(
-        _('Порядок сортування'), default=0, help_text=_('Порядок відображення альбому в списку')
+        _("Порядок сортування"),
+        default=0,
+        help_text=_("Порядок відображення альбому в списку"),
     )
 
-    objects = AlbumManager()
+    objects = AlbumQuerySet.as_manager()
 
     class Meta:
-        verbose_name = _('Альбом')
-        verbose_name_plural = _('Альбоми')
-        ordering = ['sort_order', '-created_at', 'name']
-        unique_together = [['event', 'name']]  # Унікальність назви в рамках події
+        verbose_name = _("Альбом")
+        verbose_name_plural = _("Альбоми")
+        ordering = ["sort_order", "-created_at", "name"]
+        unique_together = [["event", "name"]]  # Унікальність назви в рамках події
         indexes = [
-            models.Index(fields=['event', 'created_at']),
-            models.Index(fields=['event', 'is_public']),
-            models.Index(fields=['event', 'sort_order']),
-            models.Index(fields=['album_uuid']),
+            models.Index(fields=["event", "created_at"]),
+            models.Index(fields=["event", "is_public"]),
+            models.Index(fields=["event", "sort_order"]),
+            models.Index(fields=["album_uuid"]),
         ]
 
     def __str__(self):
-        return f'{self.name} ({self.event.event_name})'
+        return f"{self.name} ({self.event.event_name})"
 
     def clean(self):
         """Валідація моделі"""
@@ -130,25 +120,29 @@ class Album(BaseModel):
 
         # Валідація назви альбому
         if not self.name or len(self.name.strip()) < 2:
-            errors['name'] = _('Назва альбому має бути не менше 2 символів')
+            errors["name"] = _("Назва альбому має бути не менше 2 символів")
         elif len(self.name.strip()) > 255:
-            errors['name'] = _('Назва альбому занадто довга (максимум 255 символів)')
+            errors["name"] = _("Назва альбому занадто довга (максимум 255 символів)")
 
         # Валідація опису
         if self.description and len(self.description.strip()) > 500:
-            errors['description'] = _('Опис альбому занадто довгий (максимум 500 символів)')
+            errors["description"] = _(
+                "Опис альбому занадто довгий (максимум 500 символів)"
+            )
 
         # Валідація порядку сортування
         if self.sort_order < 0:
-            errors['sort_order'] = _("Порядок сортування не може бути від'ємним")
+            errors["sort_order"] = _("Порядок сортування не може бути від'ємним")
 
         # Перевірка унікальності назви в рамках події
         if self.name and self.event_id:
-            qs = Album.objects.filter(event_id=self.event_id, name__iexact=self.name.strip())
+            qs = Album.objects.filter(
+                event_id=self.event_id, name__iexact=self.name.strip()
+            )
             if self.pk:
                 qs = qs.exclude(pk=self.pk)
             if qs.exists():
-                errors['name'] = _('Альбом з такою назвою вже існує в цій події')
+                errors["name"] = _("Альбом з такою назвою вже існує в цій події")
 
         if errors:
             raise ValidationError(errors)
@@ -163,7 +157,7 @@ class Album(BaseModel):
 
         # Генеруємо S3 prefix якщо його немає
         if not self.album_s3_prefix and self.event_id:
-            self.album_s3_prefix = f'user-bucket-{self.event.user_id}/{self.event.event_uuid}/album-{self.album_uuid}'
+            self.album_s3_prefix = f"user-bucket-{self.event.user_id}/{self.event.event_uuid}/album-{self.album_uuid}"
 
         self.clean()
         super().save(*args, **kwargs)
@@ -181,26 +175,25 @@ class Album(BaseModel):
         self._clear_cache(album_id, event_id)
 
     def _clear_cache(self, album_id=None, event_id=None):
-        """Очищує кеш пов'язаний з альбомом"""
         album_id = album_id or self.id
         event_id = event_id or self.event_id
 
         if album_id:
             cache_keys = [
-                f'album_file_count:{album_id}',
-                f'album_statistics:{album_id}',
-                f'album_cover_image:{album_id}',
+                f"album_file_count:{album_id}",
+                f"album_statistics:{album_id}",
+                f"album_cover_image:{album_id}",
             ]
             cache.delete_many(cache_keys)
 
         # Очищуємо кеш події
         if event_id:
-            cache.delete(f'event_albums_count:{event_id}')
+            cache.delete(f"event_albums_count:{event_id}")
 
     @property
     def file_count(self):
         """Повертає кількість файлів в альбомі"""
-        cache_key = f'album_file_count:{self.id}'
+        cache_key = f"album_file_count:{self.id}"
         count = cache.get(cache_key)
 
         if count is None:
@@ -239,21 +232,23 @@ class Album(BaseModel):
     def set_cover_image(self, s3_key):
         """Встановлює обкладинку альбому"""
         self.cover_image_s3_key = s3_key
-        self.save(update_fields=['cover_image_s3_key'])
+        self.save(update_fields=["cover_image_s3_key"])
 
         # Очищуємо кеш обкладинки
-        cache.delete(f'album_cover_image:{self.id}')
+        cache.delete(f"album_cover_image:{self.id}")
 
     def get_file_types_summary(self):
         """Повертає статистику типів файлів в альбомі"""
-        cache_key = f'album_file_types:{self.id}'
+        cache_key = f"album_file_types:{self.id}"
         summary = cache.get(cache_key)
 
         if summary is None:
             from django.db.models import Count
 
             summary = dict(
-                self.mediafiles.values('file_type').annotate(count=Count('id')).values_list('file_type', 'count')
+                self.mediafiles.values("file_type")
+                .annotate(count=Count("id"))
+                .values_list("file_type", "count")
             )
             cache.set(cache_key, summary, 600)
 
@@ -265,19 +260,19 @@ class DownloadQuerySet(models.QuerySet):
 
     def pending(self):
         """Повертає завантаження в очікуванні"""
-        return self.filter(status='pending')
+        return self.filter(status="pending")
 
     def processing(self):
         """Повертає завантаження в процесі"""
-        return self.filter(status='processing')
+        return self.filter(status="processing")
 
     def completed(self):
         """Повертає завершені завантаження"""
-        return self.filter(status='completed')
+        return self.filter(status="completed")
 
     def failed(self):
         """Повертає невдалі завантаження"""
-        return self.filter(status='failed')
+        return self.filter(status="failed")
 
     def expired(self):
         """Повертає завантаження з минулим терміном дії"""
@@ -289,7 +284,7 @@ class DownloadQuerySet(models.QuerySet):
         """Повертає активні завантаження"""
         from django.utils import timezone
 
-        return self.filter(status='completed', expires_at__gt=timezone.now())
+        return self.filter(status="completed", expires_at__gt=timezone.now())
 
 
 class DownloadManager(models.Manager):
@@ -324,64 +319,79 @@ class Download(BaseModel):
     """
 
     DOWNLOAD_STATUSES = [
-        ('pending', _('Очікується')),
-        ('processing', _('Обробляється')),
-        ('completed', _('Завершено')),
-        ('failed', _('Помилка')),
-        ('expired', _('Минув термін дії')),
+        ("pending", _("Очікується")),
+        ("processing", _("Обробляється")),
+        ("completed", _("Завершено")),
+        ("failed", _("Помилка")),
+        ("expired", _("Минув термін дії")),
     ]
 
     album = models.ForeignKey(
         Album,
         on_delete=models.CASCADE,
-        related_name='downloads',
-        verbose_name=_('Альбом'),
-        help_text=_('Альбом для завантаження'),
+        related_name="downloads",
+        verbose_name=_("Альбом"),
+        help_text=_("Альбом для завантаження"),
         db_index=True,
     )
     download_uuid = models.UUIDField(
-        _('UUID завантаження'), default=uuid.uuid4, editable=False, unique=True, db_index=True
+        _("UUID завантаження"),
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
     )
     status = models.CharField(
-        _('Статус завантаження'),
+        _("Статус завантаження"),
         max_length=20,
         choices=DOWNLOAD_STATUSES,
-        default='pending',
-        help_text=_('Поточний статус завантаження'),
+        default="pending",
+        help_text=_("Поточний статус завантаження"),
         db_index=True,
     )
     download_url = models.URLField(
-        _('URL завантаження'),
+        _("URL завантаження"),
         max_length=500,
         null=True,
         blank=True,
-        help_text=_('Тимчасове посилання для завантаження'),
+        help_text=_("Тимчасове посилання для завантаження"),
     )
     expires_at = models.DateTimeField(
-        _('Дата закінчення'), null=True, blank=True, help_text=_('Дата та час закінчення дії посилання'), db_index=True
+        _("Дата закінчення"),
+        null=True,
+        blank=True,
+        help_text=_("Дата та час закінчення дії посилання"),
+        db_index=True,
     )
-    file_count = models.PositiveIntegerField(_('Кількість файлів'), default=0, help_text=_('Кількість файлів в архіві'))
+    file_count = models.PositiveIntegerField(
+        _("Кількість файлів"), default=0, help_text=_("Кількість файлів в архіві")
+    )
     archive_size = models.BigIntegerField(
-        _('Розмір архіву'), null=True, blank=True, help_text=_('Розмір створеного архіву в байтах')
+        _("Розмір архіву"),
+        null=True,
+        blank=True,
+        help_text=_("Розмір створеного архіву в байтах"),
     )
     error_message = models.TextField(
-        _('Повідомлення про помилку'), blank=True, help_text=_('Деталі помилки якщо завантаження невдале')
+        _("Повідомлення про помилку"),
+        blank=True,
+        help_text=_("Деталі помилки якщо завантаження невдале"),
     )
 
     objects = DownloadManager()
 
     class Meta:
-        verbose_name = _('Завантаження')
-        verbose_name_plural = _('Завантаження')
-        ordering = ['-created_at']
+        verbose_name = _("Завантаження")
+        verbose_name_plural = _("Завантаження")
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['album', 'status']),
-            models.Index(fields=['status', 'expires_at']),
-            models.Index(fields=['download_uuid']),
+            models.Index(fields=["album", "status"]),
+            models.Index(fields=["status", "expires_at"]),
+            models.Index(fields=["download_uuid"]),
         ]
 
     def __str__(self):
-        return f'Download {self.album.name} - {self.get_status_display()}'
+        return f"Download {self.album.name} - {self.get_status_display()}"
 
     def clean(self):
         """Валідація моделі"""
@@ -390,20 +400,24 @@ class Download(BaseModel):
         errors = {}
 
         # Валідація URL якщо статус completed
-        if self.status == 'completed' and not self.download_url:
-            errors['download_url'] = _("URL завантаження обов'язковий для завершених завантажень")
+        if self.status == "completed" and not self.download_url:
+            errors["download_url"] = _(
+                "URL завантаження обов'язковий для завершених завантажень"
+            )
 
         # Валідація expires_at якщо статус completed
-        if self.status == 'completed' and not self.expires_at:
-            errors['expires_at'] = _("Дата закінчення обов'язкова для завершених завантажень")
+        if self.status == "completed" and not self.expires_at:
+            errors["expires_at"] = _(
+                "Дата закінчення обов'язкова для завершених завантажень"
+            )
 
         # Валідація file_count
         if self.file_count < 0:
-            errors['file_count'] = _("Кількість файлів не може бути від'ємною")
+            errors["file_count"] = _("Кількість файлів не може бути від'ємною")
 
         # Валідація archive_size
         if self.archive_size is not None and self.archive_size < 0:
-            errors['archive_size'] = _("Розмір архіву не може бути від'ємним")
+            errors["archive_size"] = _("Розмір архіву не може бути від'ємним")
 
         if errors:
             raise ValidationError(errors)
@@ -429,7 +443,7 @@ class Download(BaseModel):
     @property
     def is_active(self):
         """Перевіряє чи активне завантаження"""
-        return self.status == 'completed' and not self.is_expired
+        return self.status == "completed" and not self.is_expired
 
     @property
     def time_remaining(self):
@@ -443,24 +457,26 @@ class Download(BaseModel):
 
     def mark_as_processing(self):
         """Позначає завантаження як таке що обробляється"""
-        self.status = 'processing'
-        self.save(update_fields=['status'])
+        self.status = "processing"
+        self.save(update_fields=["status"])
 
     def mark_as_completed(self, download_url, expires_at, archive_size=None):
         """Позначає завантаження як завершене"""
-        self.status = 'completed'
+        self.status = "completed"
         self.download_url = download_url
         self.expires_at = expires_at
         if archive_size is not None:
             self.archive_size = archive_size
-        self.save(update_fields=['status', 'download_url', 'expires_at', 'archive_size'])
+        self.save(
+            update_fields=["status", "download_url", "expires_at", "archive_size"]
+        )
 
     def mark_as_failed(self, error_message=None):
         """Позначає завантаження як невдале"""
-        self.status = 'failed'
+        self.status = "failed"
         if error_message:
             self.error_message = error_message
-        self.save(update_fields=['status', 'error_message'])
+        self.save(update_fields=["status", "error_message"])
 
     def extend_expiry(self, hours=24):
         """Продовжує термін дії завантаження"""
@@ -470,4 +486,4 @@ class Download(BaseModel):
             from django.utils import timezone
 
             self.expires_at = timezone.now() + timedelta(hours=hours)
-            self.save(update_fields=['expires_at'])
+            self.save(update_fields=["expires_at"])

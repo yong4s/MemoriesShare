@@ -16,23 +16,25 @@ class EventParticipantValidator:
         errors = {}
 
         if role == EventParticipant.Role.OWNER:
-            if event.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).exists():
-                errors['role'] = _('Event can only have one owner')
+            if event.eventparticipant_set.filter(
+                role=EventParticipant.Role.OWNER
+            ).exists():
+                errors["role"] = _("Event can only have one owner")
         # Check participant count if max_guests is set (removed max_guests field check since it was removed from model)
 
         if user.is_registered and role == EventParticipant.Role.GUEST:
-            errors['role'] = _('Registered users cannot be added as guests')
+            errors["role"] = _("Registered users cannot be added as guests")
 
         if user.is_guest and not user.guest_name:
-            errors['guest_name'] = _('Guest users must have a display name')
+            errors["guest_name"] = _("Guest users must have a display name")
 
         if event.eventparticipant_set.filter(user=user).exists():
-            errors['user'] = _('User is already a participant in this event')
+            errors["user"] = _("User is already a participant in this event")
 
         from django.utils import timezone
 
         if event.date < timezone.now().date():
-            errors['event'] = _('Cannot add participants to past events')
+            errors["event"] = _("Cannot add participants to past events")
 
         if errors:
             raise ValidationError(errors)
@@ -52,20 +54,22 @@ class EventParticipantValidator:
 
         # Cannot change from owner role
         if participant.role == EventParticipant.Role.OWNER:
-            errors['role'] = _('Cannot change role of event owner')
+            errors["role"] = _("Cannot change role of event owner")
 
         # Cannot change to owner if owner already exists
         if new_role == EventParticipant.Role.OWNER:
             if (
-                participant.event.eventparticipant_set.filter(role=EventParticipant.Role.OWNER)
+                participant.event.eventparticipant_set.filter(
+                    role=EventParticipant.Role.OWNER
+                )
                 .exclude(id=participant.id)
                 .exists()
             ):
-                errors['role'] = _('Event already has an owner')
+                errors["role"] = _("Event already has an owner")
 
         # Registered users cannot become guests
         if participant.user.is_registered and new_role == EventParticipant.Role.GUEST:
-            errors['role'] = _('Registered users cannot be guests')
+            errors["role"] = _("Registered users cannot be guests")
 
         if errors:
             raise ValidationError(errors)
@@ -86,21 +90,26 @@ class EventParticipantValidator:
         from django.utils import timezone
 
         if participant.event.date < timezone.now().date():
-            errors['rsvp_status'] = _('Cannot change RSVP for past events')
+            errors["rsvp_status"] = _("Cannot change RSVP for past events")
 
         # Event owner must always be attending
         if participant.role == EventParticipant.Role.OWNER and new_status in [
             EventParticipant.RsvpStatus.DECLINED,
             EventParticipant.RsvpStatus.NO_SHOW,
         ]:
-            errors['rsvp_status'] = _('Event owner cannot decline attendance')
+            errors["rsvp_status"] = _("Event owner cannot decline attendance")
 
         # Validate status transitions
         valid_transitions = self._get_valid_rsvp_transitions()
         current_status = participant.rsvp_status
 
-        if current_status in valid_transitions and new_status not in valid_transitions[current_status]:
-            errors['rsvp_status'] = _(f'Cannot change RSVP from {current_status} to {new_status}')
+        if (
+            current_status in valid_transitions
+            and new_status not in valid_transitions[current_status]
+        ):
+            errors["rsvp_status"] = _(
+                f"Cannot change RSVP from {current_status} to {new_status}"
+            )
 
         if errors:
             raise ValidationError(errors)
@@ -120,30 +129,30 @@ class EventParticipantValidator:
 
         # Only guest users can have guest data
         if not participant.user.is_guest:
-            errors['user'] = _('Cannot set guest data for registered users')
+            errors["user"] = _("Cannot set guest data for registered users")
 
         # Validate guest name
-        if 'guest_name' in guest_data:
-            guest_name = guest_data['guest_name']
+        if "guest_name" in guest_data:
+            guest_name = guest_data["guest_name"]
             if not guest_name or len(guest_name.strip()) < 2:
-                errors['guest_name'] = _('Guest name must be at least 2 characters')
+                errors["guest_name"] = _("Guest name must be at least 2 characters")
 
         # Validate guest email format
-        if 'guest_email' in guest_data:
-            guest_email = guest_data['guest_email']
+        if "guest_email" in guest_data:
+            guest_email = guest_data["guest_email"]
             if guest_email:  # Email is optional for guests
                 from django.core.validators import validate_email
 
                 try:
                     validate_email(guest_email)
                 except ValidationError:
-                    errors['guest_email'] = _('Invalid email format')
+                    errors["guest_email"] = _("Invalid email format")
 
         # Validate phone number format
-        if 'guest_phone' in guest_data:
-            guest_phone = guest_data['guest_phone']
+        if "guest_phone" in guest_data:
+            guest_phone = guest_data["guest_phone"]
             if guest_phone and not self._validate_phone_format(guest_phone):
-                errors['guest_phone'] = _('Invalid phone number format')
+                errors["guest_phone"] = _("Invalid phone number format")
 
         if errors:
             raise ValidationError(errors)
@@ -162,19 +171,21 @@ class EventParticipantValidator:
         errors = {}
 
         if event.date < timezone.now().date():
-            errors['event'] = _('Cannot send invitations for past events')
+            errors["event"] = _("Cannot send invitations for past events")
 
         # Validate invitation token if provided
-        if 'invite_token' in invitation_data:
-            token = invitation_data['invite_token']
+        if "invite_token" in invitation_data:
+            token = invitation_data["invite_token"]
             if not token or len(token) < 16:
-                errors['invite_token'] = _('Invitation token must be at least 16 characters')
+                errors["invite_token"] = _(
+                    "Invitation token must be at least 16 characters"
+                )
 
         # Validate join method
-        if 'join_method' in invitation_data:
-            valid_methods = ['direct', 'invitation', 'qr_code', 'link']
-            if invitation_data['join_method'] not in valid_methods:
-                errors['join_method'] = _('Invalid join method')
+        if "join_method" in invitation_data:
+            valid_methods = ["direct", "invitation", "qr_code", "link"]
+            if invitation_data["join_method"] not in valid_methods:
+                errors["join_method"] = _("Invalid join method")
 
         if errors:
             raise ValidationError(errors)
@@ -231,5 +242,5 @@ class EventParticipantValidator:
         import re
 
         # Simple phone validation - can be enhanced
-        pattern = r'^\+?[\d\s\-\(\)]{10,15}$'
+        pattern = r"^\+?[\d\s\-\(\)]{10,15}$"
         return bool(re.match(pattern, phone.strip()))

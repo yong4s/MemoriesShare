@@ -10,7 +10,7 @@ import uuid
 def generate_event_uuid() -> uuid.UUID:
     """
     Generate a new UUID4 for event entities
-    
+
     Returns:
         uuid.UUID: A new UUID4 instance for events
     """
@@ -20,7 +20,7 @@ def generate_event_uuid() -> uuid.UUID:
 def generate_uuid() -> uuid.UUID:
     """
     Generate a new UUID4 for any entity
-    
+
     Returns:
         uuid.UUID: A new UUID4 instance
     """
@@ -30,7 +30,7 @@ def generate_uuid() -> uuid.UUID:
 def generate_uuid_string() -> str:
     """
     Generate a new UUID4 as string
-    
+
     Returns:
         str: A new UUID4 as string
     """

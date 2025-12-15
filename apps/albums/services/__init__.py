@@ -10,5 +10,5 @@ from .album_service import AlbumService
 
 # Експортуємо для зручності
 __all__ = [
-    'AlbumService',
+    "AlbumService",
 ]

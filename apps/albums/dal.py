@@ -16,5 +16,5 @@ class AlbumDAL:
 
     def get_event_by_album_id(self, album_uuid):
         """Отримує подію (Event), до якої належить альбом."""
-        album = Album.objects.filter(id=album_uuid).select_related('event').first()
+        album = Album.objects.filter(id=album_uuid).select_related("event").first()
         return album.event if album else None

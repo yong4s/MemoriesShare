@@ -14,9 +14,9 @@ class EventFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Event
 
-    event_name = factory.Faker('sentence', nb_words=3)
-    event_uuid = factory.LazyFunction(lambda: __import__('uuid').uuid4())
-    description = factory.Faker('paragraph', nb_sentences=5)
+    event_name = factory.Faker("sentence", nb_words=3)
+    event_uuid = factory.LazyFunction(lambda: __import__("uuid").uuid4())
+    description = factory.Faker("paragraph", nb_sentences=5)
     date = factory.LazyFunction(lambda: date.today() + timedelta(days=7))
     is_public = False
 
@@ -25,7 +25,8 @@ class FutureEventFactory(EventFactory):
     """Factory для створення майбутніх подій"""
 
     date = factory.LazyFunction(
-        lambda: date.today() + timedelta(days=factory.Faker('pyint', min_value=1, max_value=365).generate())
+        lambda: date.today()
+        + timedelta(days=factory.Faker("pyint", min_value=1, max_value=365).generate())
     )
 
 
@@ -33,14 +34,13 @@ class PastEventFactory(EventFactory):
     """Factory для створення минулих подій"""
 
     date = factory.LazyFunction(
-        lambda: date.today() - timedelta(days=factory.Faker('pyint', min_value=1, max_value=365).generate())
+        lambda: date.today()
+        - timedelta(days=factory.Faker("pyint", min_value=1, max_value=365).generate())
     )
 
 
 class LimitedEventFactory(EventFactory):
     """Factory для створення подій (max_guests field removed)"""
-
-    pass
 
 
 class GuestFactory(factory.django.DjangoModelFactory):
@@ -50,41 +50,41 @@ class GuestFactory(factory.django.DjangoModelFactory):
         model = Guest
 
     event = factory.SubFactory(EventFactory)
-    name = factory.Faker('name')
-    email = factory.Faker('email')
+    name = factory.Faker("name")
+    email = factory.Faker("email")
     phone_number = factory.LazyFunction(
         lambda: f'+380{factory.Faker("random_int", min=500000000, max=999999999).generate()}'
     )
-    dietary_preferences = factory.Faker('sentence', nb_words=3)
-    rsvp_status = 'pending'
+    dietary_preferences = factory.Faker("sentence", nb_words=3)
+    rsvp_status = "pending"
 
 
 class AcceptedGuestFactory(GuestFactory):
     """Factory для створення підтверджених гостей"""
 
-    rsvp_status = 'accepted'
+    rsvp_status = "accepted"
 
 
 class DeclinedGuestFactory(GuestFactory):
     """Factory для створення відмовлених гостей"""
 
-    rsvp_status = 'declined'
+    rsvp_status = "declined"
 
 
 class PendingGuestFactory(GuestFactory):
     """Factory для створення очікуючих гостей"""
 
-    rsvp_status = 'pending'
+    rsvp_status = "pending"
 
 
 class RespondedGuestFactory(GuestFactory):
     """Factory для створення гостей що відповіли"""
 
-    rsvp_status = 'accepted'
-    responded_at = factory.Faker('date_time_this_year')
+    rsvp_status = "accepted"
+    responded_at = factory.Faker("date_time_this_year")
 
 
 class InvitedGuestFactory(GuestFactory):
     """Factory для створення запрошених гостей"""
 
-    invitation_sent_at = factory.Faker('date_time_this_year')
+    invitation_sent_at = factory.Faker("date_time_this_year")
