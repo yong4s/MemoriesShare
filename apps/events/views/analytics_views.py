@@ -7,11 +7,10 @@ from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
 from apps.events.permissions import CanAccessEvent
 from apps.events.permissions import EventPermissionMixin
 from apps.events.serializers import EventListSerializer
+from apps.events.views.event_views import BaseEventAPIView
 
-from .event_views import BaseEventAPIView
 
-
-@extend_schema(tags=["Event Analytics"])
+@extend_schema(tags=['Event Analytics'])
 class EventAnalyticsAPIView(BaseEventAPIView, EventPermissionMixin):
     """Event analytics and statistics"""
 
@@ -19,9 +18,7 @@ class EventAnalyticsAPIView(BaseEventAPIView, EventPermissionMixin):
 
     def get(self, request, event_uuid):
         """Get event analytics and statistics"""
-        event = self.get_event_service().get_event_detail(
-            event_uuid=event_uuid, user_id=request.user.id
-        )
+        event = self.get_event_service().get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
 
         analytics_dal = EventAnalyticsDAL()
 
@@ -32,28 +29,28 @@ class EventAnalyticsAPIView(BaseEventAPIView, EventPermissionMixin):
         )
 
         response_data = {
-            "event_uuid": str(event_uuid),
-            "event_name": event.event_name,
-            "statistics": statistics,
-            "participant_breakdown": {
-                "by_role": {
-                    "owners": statistics.get("owners_count", 0),
-                    "moderators": statistics.get("moderators_count", 0),
-                    "guests": statistics.get("guests_count", 0),
+            'event_uuid': str(event_uuid),
+            'event_name': event.event_name,
+            'statistics': statistics,
+            'participant_breakdown': {
+                'by_role': {
+                    'owners': statistics.get('owners_count', 0),
+                    'moderators': statistics.get('moderators_count', 0),
+                    'guests': statistics.get('guests_count', 0),
                 },
-                "by_rsvp": {
-                    "accepted": statistics.get("accepted_count", 0),
-                    "pending": statistics.get("pending_count", 0),
-                    "declined": statistics.get("declined_count", 0),
+                'by_rsvp': {
+                    'accepted': statistics.get('accepted_count', 0),
+                    'pending': statistics.get('pending_count', 0),
+                    'declined': statistics.get('declined_count', 0),
                 },
             },
-            "total_participants": len(participants),
+            'total_participants': len(participants),
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Event Analytics"])
+@extend_schema(tags=['Event Analytics'])
 class UserEventAnalyticsAPIView(BaseEventAPIView):
     """User's event analytics"""
 
@@ -73,14 +70,14 @@ class UserEventAnalyticsAPIView(BaseEventAPIView):
         upcoming_serializer = EventListSerializer(upcoming_events, many=True)
 
         response_data = {
-            "user_statistics": user_stats,
-            "recent_events": recent_serializer.data,
-            "upcoming_events": upcoming_serializer.data,
-            "summary": {
-                "total_events": user_stats.get("total_events", 0),
-                "owned_events": user_stats.get("owned_events", 0),
-                "upcoming_count": len(upcoming_events),
-                "recent_count": len(recent_events),
+            'user_statistics': user_stats,
+            'recent_events': recent_serializer.data,
+            'upcoming_events': upcoming_serializer.data,
+            'summary': {
+                'total_events': user_stats.get('total_events', 0),
+                'owned_events': user_stats.get('owned_events', 0),
+                'upcoming_count': len(upcoming_events),
+                'recent_count': len(recent_events),
             },
         }
 

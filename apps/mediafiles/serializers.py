@@ -1,10 +1,9 @@
 from django.core.validators import FileExtensionValidator
 from rest_framework import serializers
 
+from apps.mediafiles.models import Download
+from apps.mediafiles.models import MediaFile
 from apps.shared.storage.s3_utils import file_generate_name
-
-from .models import Download
-from .models import MediaFile
 
 
 class MediaFileSerializer(serializers.ModelSerializer):
@@ -13,14 +12,14 @@ class MediaFileSerializer(serializers.ModelSerializer):
         validators=[
             FileExtensionValidator(
                 allowed_extensions=[
-                    "jpg",
-                    "png",
-                    "jpeg",
-                    "pdf",
-                    "gif",
-                    "mp3",
-                    "mp4",
-                    "mov",
+                    'jpg',
+                    'png',
+                    'jpeg',
+                    'pdf',
+                    'gif',
+                    'mp3',
+                    'mp4',
+                    'mov',
                 ]
             )
         ],
@@ -29,25 +28,25 @@ class MediaFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = MediaFile
         fields = (
-            "mediafilePK",
-            "album_id",
-            "user_id",
-            "file",
-            "file_type",
-            "S3_bucket_name",
-            "S3_object_key",
+            'mediafilePK',
+            'album_id',
+            'user_id',
+            'file',
+            'file_type',
+            'S3_bucket_name',
+            'S3_object_key',
         )
         read_only_fields = (
-            "mediafilePK",
-            "file_type",
-            "S3_bucket_name",
-            "S3_object_key",
-            "user_id",
-            "album_id",
+            'mediafilePK',
+            'file_type',
+            'S3_bucket_name',
+            'S3_object_key',
+            'user_id',
+            'album_id',
         )
 
 
 class DownloadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Download
-        fields = "__all__"
+        fields = '__all__'

@@ -8,8 +8,8 @@ This module provides reusable decorators for common concerns:
 - Performance monitoring
 """
 
-from .database import handle_db_errors
+from apps.shared.decorators.database import handle_db_errors
 
 __all__ = [
-    "handle_db_errors",
+    'handle_db_errors',
 ]

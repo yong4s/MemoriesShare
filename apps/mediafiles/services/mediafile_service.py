@@ -10,12 +10,11 @@ from rest_framework.exceptions import PermissionDenied
 
 from apps.albums.models import Album
 from apps.events.models import Event
+from apps.mediafiles.models import MediaFile
 from apps.shared.exceptions.exception import S3ServiceError
 from apps.shared.exceptions.exception import S3UploadException
 from apps.shared.storage.optimized_s3_service import OptimizedS3Service
 from apps.shared.storage.s3_utils import file_generate_name
-
-from ..models import MediaFile
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +53,12 @@ class MediafileService:
             S3UploadException: При помилці завантаження в S3
         """
         validated_data = serializer.validated_data
-        file = validated_data.get("file")
+        file = validated_data.get('file')
 
         if not file:
-            logger.error("File creation attempted without file")
-            raise ValidationError("File field is required")
+            logger.error('File creation attempted without file')
+            msg = 'File field is required'
+            raise ValidationError(msg)
 
         album = self._get_album(album_pk)
         validated_data = self._prepare_validated_data(validated_data, file, user, album)
@@ -68,9 +68,7 @@ class MediafileService:
 
         # Зберігаємо в БД
         mediafile = serializer.save()
-        logger.info(
-            f"MediaFile {mediafile.id} created successfully for album {album_pk}"
-        )
+        logger.info(f'MediaFile {mediafile.id} created successfully for album {album_pk}')
 
         return mediafile
 
@@ -101,31 +99,27 @@ class MediafileService:
         file_uuid = str(uuid.uuid4())
 
         # Генеруємо ключ для S3
-        storage_key = (
-            f"user-bucket-{user_id}/{event.event_gallery_url}/{album_name}/{file_uuid}"
-        )
+        storage_key = f'user-bucket-{user_id}/{event.event_gallery_url}/{album_name}/{file_uuid}'
 
         try:
-            presigned_url = self.s3service.generate_upload_url(
-                key=storage_key, content_type=file_type, expiration=3600
-            )
+            presigned_url = self.s3service.generate_upload_url(key=storage_key, content_type=file_type, expiration=3600)
 
-            logger.info(
-                f"Generated upload URL for event {event_uuid}, album {album_name}, user {user_id}"
-            )
+            logger.info(f'Generated upload URL for event {event_uuid}, album {album_name}, user {user_id}')
             return {
-                "upload_url": presigned_url,
-                "storage_key": storage_key,
-                "file_uuid": file_uuid,
-                "expires_in": 3600,
-                "storage_provider": "s3",
+                'upload_url': presigned_url,
+                'storage_key': storage_key,
+                'file_uuid': file_uuid,
+                'expires_in': 3600,
+                'storage_provider': 's3',
             }
         except (ClientError, BotoCoreError) as e:
-            logger.error(f"AWS error generating presigned URL: {e!s}")
-            raise S3ServiceError(f"AWS error generating upload URL: {e!s}")
+            logger.exception(f'AWS error generating presigned URL: {e!s}')
+            msg = f'AWS error generating upload URL: {e!s}'
+            raise S3ServiceError(msg)
         except Exception as e:
-            logger.exception("Unexpected error generating presigned URL")
-            raise S3ServiceError(f"Failed to generate upload URL: {e!s}")
+            logger.exception('Unexpected error generating presigned URL')
+            msg = f'Failed to generate upload URL: {e!s}'
+            raise S3ServiceError(msg)
 
     def generate_download_url_by_uuid(self, event_uuid, user_id, s3_key, filename=None):
         """
@@ -149,21 +143,22 @@ class MediafileService:
 
         # Перевіряємо чи файл належить до цієї події
         if not self._validate_file_access(s3_key, user_id, event):
-            raise PermissionDenied("Access denied to this file")
+            msg = 'Access denied to this file'
+            raise PermissionDenied(msg)
 
         try:
-            presigned_url = self.s3service.generate_download_url(
-                key=s3_key, expiration=3600, filename=filename
-            )
+            presigned_url = self.s3service.generate_download_url(key=s3_key, expiration=3600, filename=filename)
 
-            logger.info(f"Generated download URL for file {s3_key}, user {user_id}")
-            return {"download_url": presigned_url, "s3_key": s3_key, "expires_in": 3600}
+            logger.info(f'Generated download URL for file {s3_key}, user {user_id}')
+            return {'download_url': presigned_url, 's3_key': s3_key, 'expires_in': 3600}
         except (ClientError, BotoCoreError) as e:
-            logger.error(f"AWS error generating download URL: {e!s}")
-            raise S3ServiceError(f"AWS error generating download URL: {e!s}")
+            logger.exception(f'AWS error generating download URL: {e!s}')
+            msg = f'AWS error generating download URL: {e!s}'
+            raise S3ServiceError(msg)
         except Exception as e:
-            logger.exception("Unexpected error generating download URL")
-            raise S3ServiceError(f"Failed to generate download URL: {e!s}")
+            logger.exception('Unexpected error generating download URL')
+            msg = f'Failed to generate download URL: {e!s}'
+            raise S3ServiceError(msg)
 
     def generate_bulk_download_urls_by_uuid(self, event_uuid, user_id, s3_keys):
         """
@@ -185,31 +180,30 @@ class MediafileService:
         event = self._get_event_by_uuid_with_access_check(event_uuid, user_id)
 
         # Фільтруємо тільки файли, що належать до цієї події
-        event_prefix = f"user-bucket-{user_id}/{event.event_gallery_url}/"
+        event_prefix = f'user-bucket-{user_id}/{event.event_gallery_url}/'
         authorized_keys = [key for key in s3_keys if key.startswith(event_prefix)]
 
         if not authorized_keys:
-            raise PermissionDenied("No authorized files found")
+            msg = 'No authorized files found'
+            raise PermissionDenied(msg)
 
         try:
-            urls = self.s3service.generate_bulk_download_urls(
-                keys=authorized_keys, expiration=3600
-            )
+            urls = self.s3service.generate_bulk_download_urls(keys=authorized_keys, expiration=3600)
 
-            logger.info(
-                f"Generated bulk download URLs for {len(authorized_keys)} files, user {user_id}"
-            )
+            logger.info(f'Generated bulk download URLs for {len(authorized_keys)} files, user {user_id}')
             return {
-                "download_urls": urls,
-                "total_files": len(authorized_keys),
-                "expires_in": 3600,
+                'download_urls': urls,
+                'total_files': len(authorized_keys),
+                'expires_in': 3600,
             }
         except (ClientError, BotoCoreError) as e:
-            logger.error(f"AWS error generating bulk download URLs: {e!s}")
-            raise S3ServiceError(f"AWS error generating bulk download URLs: {e!s}")
+            logger.exception(f'AWS error generating bulk download URLs: {e!s}')
+            msg = f'AWS error generating bulk download URLs: {e!s}'
+            raise S3ServiceError(msg)
         except Exception as e:
-            logger.exception("Unexpected error generating bulk download URLs")
-            raise S3ServiceError(f"Failed to generate bulk download URLs: {e!s}")
+            logger.exception('Unexpected error generating bulk download URLs')
+            msg = f'Failed to generate bulk download URLs: {e!s}'
+            raise S3ServiceError(msg)
 
     def delete_file_by_uuid(self, event_uuid, user_id, s3_key):
         """
@@ -232,15 +226,17 @@ class MediafileService:
 
         # Перевіряємо чи файл належить до цієї події
         if not self._validate_file_access(s3_key, user_id, event):
-            raise PermissionDenied("Access denied to this file")
+            msg = 'Access denied to this file'
+            raise PermissionDenied(msg)
 
         try:
             self.s3service.delete_s3_object(s3_key)
-            logger.info(f"Deleted file {s3_key}, user {user_id}")
+            logger.info(f'Deleted file {s3_key}, user {user_id}')
             return True
         except Exception as e:
-            logger.error(f"Failed to delete file {s3_key}: {e!s}")
-            raise S3ServiceError(f"Failed to delete file: {e!s}")
+            logger.exception(f'Failed to delete file {s3_key}: {e!s}')
+            msg = f'Failed to delete file: {e!s}'
+            raise S3ServiceError(msg)
 
     def get_file_metadata_by_uuid(self, event_uuid, user_id, s3_key):
         """
@@ -263,21 +259,19 @@ class MediafileService:
 
         # Перевіряємо чи файл належить до цієї події
         if not self._validate_file_access(s3_key, user_id, event):
-            raise PermissionDenied("Access denied to this file")
+            msg = 'Access denied to this file'
+            raise PermissionDenied(msg)
 
         try:
             metadata = self.s3service.get_object_metadata(s3_key)
-            logger.info(
-                f"Retrieved metadata for file {s3_key}, event {event_uuid}, user {user_id}"
-            )
+            logger.info(f'Retrieved metadata for file {s3_key}, event {event_uuid}, user {user_id}')
             return metadata
         except Exception as e:
-            logger.error(f"Failed to get file metadata {s3_key}: {e!s}")
-            raise S3ServiceError(f"Failed to get file metadata: {e!s}")
+            logger.exception(f'Failed to get file metadata {s3_key}: {e!s}')
+            msg = f'Failed to get file metadata: {e!s}'
+            raise S3ServiceError(msg)
 
-    def process_uploaded_file_by_uuid(
-        self, event_uuid, user_id, s3_key, file_type, file_uuid=None
-    ):
+    def process_uploaded_file_by_uuid(self, event_uuid, user_id, s3_key, file_type, file_uuid=None):
         """
         Обробка завантаженого файлу за UUID події (створення thumbnail тощо).
 
@@ -300,7 +294,8 @@ class MediafileService:
 
         # Перевіряємо чи файл належить до цієї події
         if not self._validate_file_access(s3_key, user_id, event):
-            raise PermissionDenied("Access denied to this file")
+            msg = 'Access denied to this file'
+            raise PermissionDenied(msg)
 
         try:
             # Обробка файлу (thumbnails, metadata extraction тощо)
@@ -309,11 +304,12 @@ class MediafileService:
             # Можна додати збереження в базу даних
             # self._save_file_record(event.id, user_id, s3_key, file_type, result)
 
-            logger.info(f"Processed uploaded file {s3_key}, user {user_id}")
+            logger.info(f'Processed uploaded file {s3_key}, user {user_id}')
             return result
         except Exception as e:
-            logger.error(f"Failed to process file {s3_key}: {e!s}")
-            raise S3ServiceError(f"Failed to process file: {e!s}")
+            logger.exception(f'Failed to process file {s3_key}: {e!s}')
+            msg = f'Failed to process file: {e!s}'
+            raise S3ServiceError(msg)
 
     def get_files_for_album(self, album_id, user_id):
         """
@@ -336,14 +332,11 @@ class MediafileService:
         try:
             self.permission_service.validate_guest_or_owner_access(album.event, user_id)
         except:
-            logger.warning(
-                f"User {user_id} attempted to access files for album {album_id} without permission"
-            )
-            raise PermissionDenied(
-                "You do not have permission to view files in this album."
-            )
+            logger.warning(f'User {user_id} attempted to access files for album {album_id} without permission')
+            msg = 'You do not have permission to view files in this album.'
+            raise PermissionDenied(msg)
 
-        return MediaFile.objects.filter(album_id=album_id).order_by("-created_at")
+        return MediaFile.objects.filter(album_id=album_id).order_by('-created_at')
 
     # ==============================================================================
     # HELPER METHODS
@@ -365,8 +358,9 @@ class MediafileService:
         try:
             return Album.objects.get(pk=album_pk)
         except Album.DoesNotExist:
-            logger.error(f"Album {album_pk} not found")
-            raise ValidationError("Album not found")
+            logger.exception(f'Album {album_pk} not found')
+            msg = 'Album not found'
+            raise ValidationError(msg)
 
     def _prepare_validated_data(self, validated_data, file, user, album):
         """
@@ -381,12 +375,12 @@ class MediafileService:
         Returns:
             dict: Підготовлені дані
         """
-        validated_data["S3_object_key"] = file_generate_name(file.name)
-        validated_data["S3_bucket_name"] = str(user.pk)
+        validated_data['S3_object_key'] = file_generate_name(file.name)
+        validated_data['S3_bucket_name'] = str(user.pk)
         mime_type, _ = mimetypes.guess_type(file.name)
-        validated_data["file_type"] = mime_type or ""
-        validated_data["user_pk"] = user.pk
-        validated_data["album_pk"] = album.pk
+        validated_data['file_type'] = mime_type or ''
+        validated_data['user_pk'] = user.pk
+        validated_data['album_pk'] = album.pk
         return validated_data
 
     def _upload_file_to_s3(self, file, validated_data, album):
@@ -403,16 +397,14 @@ class MediafileService:
         """
         try:
             # Структура: users/{user_uuid}/events/{event_uuid}/albums/{album_uuid}/mediafiles/{mediafile_uuid}
-            s3_key = (
-                f"{album.album_s3_prefix}/mediafiles/{validated_data['S3_object_key']}"
-            )
-            logger.info(f"Uploading file to S3: {s3_key}")
+            s3_key = f"{album.album_s3_prefix}/mediafiles/{validated_data['S3_object_key']}"
+            logger.info(f'Uploading file to S3: {s3_key}')
 
-            self.s3service.upload_file(file, validated_data["S3_bucket_name"], s3_key)
+            self.s3service.upload_file(file, validated_data['S3_bucket_name'], s3_key)
 
-            logger.info(f"File uploaded successfully to: {s3_key}")
+            logger.info(f'File uploaded successfully to: {s3_key}')
         except Exception as e:
-            logger.error(f"Failed to upload file to S3: {e!s}")
+            logger.exception(f'Failed to upload file to S3: {e!s}')
             raise S3UploadException(str(e))
 
     def _get_event_by_uuid_with_access_check(self, event_uuid, user_id):
@@ -433,17 +425,17 @@ class MediafileService:
         try:
             event = Event.objects.get(event_uuid=event_uuid)
         except Event.DoesNotExist:
-            logger.error(f"Event {event_uuid} not found")
-            raise NotFound("Подію не знайдено")
+            logger.exception(f'Event {event_uuid} not found')
+            msg = 'Подію не знайдено'
+            raise NotFound(msg)
 
         # Перевіряємо доступ до події через permission service
         try:
             self.permission_service.validate_guest_or_owner_access(event, user_id)
         except:
-            logger.warning(
-                f"User {user_id} attempted to access event {event_uuid} without permission"
-            )
-            raise PermissionDenied("Ви не маєте доступу до цієї події")
+            logger.warning(f'User {user_id} attempted to access event {event_uuid} without permission')
+            msg = 'Ви не маєте доступу до цієї події'
+            raise PermissionDenied(msg)
 
         return event
 
@@ -459,7 +451,7 @@ class MediafileService:
         Returns:
             bool: True якщо доступ дозволено
         """
-        return s3_key.startswith(f"user-bucket-{user_id}/{event.event_gallery_url}/")
+        return s3_key.startswith(f'user-bucket-{user_id}/{event.event_gallery_url}/')
 
     def _validate_file_type(self, file_type):
         """
@@ -472,21 +464,21 @@ class MediafileService:
             ValidationError: Якщо тип файлу не підтримується
         """
         allowed_types = [
-            "image/jpeg",
-            "image/jpg",
-            "image/png",
-            "image/gif",
-            "image/webp",
-            "video/mp4",
-            "video/mov",
-            "video/avi",
-            "video/quicktime",
-            "application/pdf",
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'video/mp4',
+            'video/mov',
+            'video/avi',
+            'video/quicktime',
+            'application/pdf',
         ]
 
         if file_type not in allowed_types:
-            logger.warning(f"Unsupported file type attempted: {file_type}")
+            logger.warning(f'Unsupported file type attempted: {file_type}')
+            msg = f"Непідтримуваний тип файлу: {file_type}. " f"Дозволені типи: {', '.join(allowed_types)}"
             raise ValidationError(
-                f"Непідтримуваний тип файлу: {file_type}. "
-                f"Дозволені типи: {', '.join(allowed_types)}"
+                msg
             )

@@ -23,7 +23,7 @@ class AppError(Exception):
     HTTP status codes are mapped by the API exception handler.
     """
 
-    def __init__(self, message: str, error_code: str = None, context: dict = None):
+    def __init__(self, message: str, error_code: str | None = None, context: dict | None = None):
         super().__init__(message)
         self.message = message
         self.error_code = error_code or self.__class__.__name__
@@ -76,7 +76,7 @@ class ValidationError(AppError):
     HTTP Mapping: 400 BAD REQUEST
     """
 
-    def __init__(self, message: str, field_errors: dict = None, **kwargs):
+    def __init__(self, message: str, field_errors: dict | None = None, **kwargs):
         super().__init__(message, **kwargs)
         self.field_errors = field_errors or {}
 
@@ -135,40 +135,34 @@ class ConfigurationError(AppError):
 
 
 # Convenience functions for common patterns
-def resource_not_found(
-    resource_type: str, identifier: str, **context
-) -> ResourceNotFoundError:
+def resource_not_found(resource_type: str, identifier: str, **context) -> ResourceNotFoundError:
     """Factory function for consistent resource not found errors"""
     message = f"{resource_type} with identifier '{identifier}' not found"
-    error_code = f"{resource_type.lower()}_not_found"
+    error_code = f'{resource_type.lower()}_not_found'
     return ResourceNotFoundError(
         message=message,
         error_code=error_code,
-        context={"resource_type": resource_type, "identifier": identifier, **context},
+        context={'resource_type': resource_type, 'identifier': identifier, **context},
     )
 
 
-def permission_denied(
-    action: str, resource: str, user_id: int = None, **context
-) -> PermissionError:
+def permission_denied(action: str, resource: str, user_id: int | None = None, **context) -> PermissionError:
     """Factory function for consistent permission errors"""
     message = f"Permission denied for action '{action}' on {resource}"
-    error_code = f"{action}_permission_denied"
+    error_code = f'{action}_permission_denied'
     return PermissionError(
         message=message,
         error_code=error_code,
-        context={"action": action, "resource": resource, "user_id": user_id, **context},
+        context={'action': action, 'resource': resource, 'user_id': user_id, **context},
     )
 
 
-def business_rule_violated(
-    rule_name: str, details: str, **context
-) -> BusinessRuleViolation:
+def business_rule_violated(rule_name: str, details: str, **context) -> BusinessRuleViolation:
     """Factory function for business rule violations"""
-    message = f"Business rule violation: {rule_name}. {details}"
-    error_code = f"{rule_name.lower()}_violation"
+    message = f'Business rule violation: {rule_name}. {details}'
+    error_code = f'{rule_name.lower()}_violation'
     return BusinessRuleViolation(
         message=message,
         error_code=error_code,
-        context={"rule_name": rule_name, "details": details, **context},
+        context={'rule_name': rule_name, 'details': details, **context},
     )

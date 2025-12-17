@@ -11,250 +11,236 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("events", "0001_initial"),
+        ('events', '0001_initial'),
     ]
 
     operations = [
         migrations.CreateModel(
-            name="Album",
+            name='Album',
             fields=[
                 (
-                    "id",
+                    'id',
                     models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
-                        verbose_name="ID",
+                        verbose_name='ID',
                     ),
                 ),
-                ("created_at", models.DateTimeField(auto_now_add=True)),
-                ("updated_at", models.DateTimeField(auto_now=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
                 (
-                    "name",
+                    'name',
                     models.CharField(
                         db_index=True,
-                        help_text="Введіть назву альбому (не більше 255 символів)",
+                        help_text='Enter album name (maximum 255 characters)',
                         max_length=255,
-                        verbose_name="Назва альбому",
+                        verbose_name='Album Name',
                     ),
                 ),
                 (
-                    "description",
+                    'description',
                     models.TextField(
                         blank=True,
-                        help_text="Додайте опис альбому (не більше 500 символів)",
+                        help_text='Add album description (maximum 500 characters)',
                         max_length=500,
-                        verbose_name="Опис альбому",
+                        verbose_name='Album Description',
                     ),
                 ),
                 (
-                    "album_uuid",
+                    'album_uuid',
                     models.UUIDField(
                         db_index=True,
                         default=uuid.uuid4,
                         editable=False,
                         unique=True,
-                        verbose_name="UUID альбому",
+                        verbose_name='Album UUID',
                     ),
                 ),
                 (
-                    "album_s3_prefix",
+                    'album_s3_prefix',
                     models.CharField(
-                        help_text="S3 шлях для зберігання файлів альбому",
+                        help_text='S3 path for storing album files',
                         max_length=500,
                         unique=True,
-                        verbose_name="S3 Prefix",
+                        verbose_name='S3 Prefix',
                     ),
                 ),
                 (
-                    "is_public",
+                    'is_public',
                     models.BooleanField(
                         default=False,
-                        help_text="Чи є альбом публічним для перегляду",
-                        verbose_name="Публічний альбом",
+                        help_text='Whether the album is public for viewing',
+                        verbose_name='Public Album',
                     ),
                 ),
                 (
-                    "cover_image_s3_key",
+                    'cover_image_s3_key',
                     models.CharField(
                         blank=True,
-                        help_text="S3 ключ для обкладинки альбому",
+                        help_text='S3 key for album cover image',
                         max_length=500,
-                        verbose_name="Обкладинка альбому",
+                        verbose_name='Album Cover',
                     ),
                 ),
                 (
-                    "sort_order",
+                    'sort_order',
                     models.PositiveIntegerField(
                         default=0,
-                        help_text="Порядок відображення альбому в списку",
-                        verbose_name="Порядок сортування",
+                        help_text='Display order of album in list',
+                        verbose_name='Sort Order',
                     ),
                 ),
                 (
-                    "event",
+                    'event',
                     models.ForeignKey(
-                        help_text="Подія, до якої належить альбом",
+                        help_text='Event that owns the album',
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="albums",
-                        to="events.event",
-                        verbose_name="Подія",
+                        related_name='albums',
+                        to='events.event',
+                        verbose_name='Event',
                     ),
                 ),
             ],
             options={
-                "verbose_name": "Альбом",
-                "verbose_name_plural": "Альбоми",
-                "ordering": ["sort_order", "-created_at", "name"],
+                'verbose_name': 'Album',
+                'verbose_name_plural': 'Albums',
+                'ordering': ['sort_order', '-created_at', 'name'],
             },
         ),
         migrations.CreateModel(
-            name="Download",
+            name='Download',
             fields=[
                 (
-                    "id",
+                    'id',
                     models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
-                        verbose_name="ID",
+                        verbose_name='ID',
                     ),
                 ),
-                ("created_at", models.DateTimeField(auto_now_add=True)),
-                ("updated_at", models.DateTimeField(auto_now=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
                 (
-                    "download_uuid",
+                    'download_uuid',
                     models.UUIDField(
                         db_index=True,
                         default=uuid.uuid4,
                         editable=False,
                         unique=True,
-                        verbose_name="UUID завантаження",
+                        verbose_name='Download UUID',
                     ),
                 ),
                 (
-                    "status",
+                    'status',
                     models.CharField(
                         choices=[
-                            ("pending", "Очікується"),
-                            ("processing", "Обробляється"),
-                            ("completed", "Завершено"),
-                            ("failed", "Помилка"),
-                            ("expired", "Минув термін дії"),
+                            ('pending', 'Pending'),
+                            ('processing', 'Processing'),
+                            ('completed', 'Completed'),
+                            ('failed', 'Failed'),
+                            ('expired', 'Expired'),
                         ],
                         db_index=True,
-                        default="pending",
-                        help_text="Поточний статус завантаження",
+                        default='pending',
+                        help_text='Current download status',
                         max_length=20,
-                        verbose_name="Статус завантаження",
+                        verbose_name='Download Status',
                     ),
                 ),
                 (
-                    "download_url",
+                    'download_url',
                     models.URLField(
                         blank=True,
-                        help_text="Тимчасове посилання для завантаження",
+                        help_text='Temporary download link',
                         max_length=500,
                         null=True,
-                        verbose_name="URL завантаження",
+                        verbose_name='Download URL',
                     ),
                 ),
                 (
-                    "expires_at",
+                    'expires_at',
                     models.DateTimeField(
                         blank=True,
                         db_index=True,
-                        help_text="Дата та час закінчення дії посилання",
+                        help_text='Link expiration date and time',
                         null=True,
-                        verbose_name="Дата закінчення",
+                        verbose_name='Expiration Date',
                     ),
                 ),
                 (
-                    "file_count",
+                    'file_count',
                     models.PositiveIntegerField(
                         default=0,
-                        help_text="Кількість файлів в архіві",
-                        verbose_name="Кількість файлів",
+                        help_text='Number of files in archive',
+                        verbose_name='File Count',
                     ),
                 ),
                 (
-                    "archive_size",
+                    'archive_size',
                     models.BigIntegerField(
                         blank=True,
-                        help_text="Розмір створеного архіву в байтах",
+                        help_text='Size of created archive in bytes',
                         null=True,
-                        verbose_name="Розмір архіву",
+                        verbose_name='Archive Size',
                     ),
                 ),
                 (
-                    "error_message",
+                    'error_message',
                     models.TextField(
                         blank=True,
-                        help_text="Деталі помилки якщо завантаження невдале",
-                        verbose_name="Повідомлення про помилку",
+                        help_text='Error details if download failed',
+                        verbose_name='Error Message',
                     ),
                 ),
                 (
-                    "album",
+                    'album',
                     models.ForeignKey(
-                        help_text="Альбом для завантаження",
+                        help_text='Album for download',
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="downloads",
-                        to="albums.album",
-                        verbose_name="Альбом",
+                        related_name='downloads',
+                        to='albums.album',
+                        verbose_name='Album',
                     ),
                 ),
             ],
             options={
-                "verbose_name": "Завантаження",
-                "verbose_name_plural": "Завантаження",
-                "ordering": ["-created_at"],
+                'verbose_name': 'Download',
+                'verbose_name_plural': 'Downloads',
+                'ordering': ['-created_at'],
             },
         ),
         migrations.AddIndex(
-            model_name="album",
-            index=models.Index(
-                fields=["event", "created_at"], name="albums_albu_event_i_31f78f_idx"
-            ),
+            model_name='album',
+            index=models.Index(fields=['event', 'created_at'], name='albums_albu_event_i_31f78f_idx'),
         ),
         migrations.AddIndex(
-            model_name="album",
-            index=models.Index(
-                fields=["event", "is_public"], name="albums_albu_event_i_b43366_idx"
-            ),
+            model_name='album',
+            index=models.Index(fields=['event', 'is_public'], name='albums_albu_event_i_b43366_idx'),
         ),
         migrations.AddIndex(
-            model_name="album",
-            index=models.Index(
-                fields=["event", "sort_order"], name="albums_albu_event_i_aa978e_idx"
-            ),
+            model_name='album',
+            index=models.Index(fields=['event', 'sort_order'], name='albums_albu_event_i_aa978e_idx'),
         ),
         migrations.AddIndex(
-            model_name="album",
-            index=models.Index(
-                fields=["album_uuid"], name="albums_albu_album_u_e33d20_idx"
-            ),
+            model_name='album',
+            index=models.Index(fields=['album_uuid'], name='albums_albu_album_u_e33d20_idx'),
         ),
         migrations.AlterUniqueTogether(
-            name="album",
-            unique_together={("event", "name")},
+            name='album',
+            unique_together={('event', 'name')},
         ),
         migrations.AddIndex(
-            model_name="download",
-            index=models.Index(
-                fields=["album", "status"], name="albums_down_album_i_57ad55_idx"
-            ),
+            model_name='download',
+            index=models.Index(fields=['album', 'status'], name='albums_down_album_i_57ad55_idx'),
         ),
         migrations.AddIndex(
-            model_name="download",
-            index=models.Index(
-                fields=["status", "expires_at"], name="albums_down_status_a9b8a7_idx"
-            ),
+            model_name='download',
+            index=models.Index(fields=['status', 'expires_at'], name='albums_down_status_a9b8a7_idx'),
         ),
         migrations.AddIndex(
-            model_name="download",
-            index=models.Index(
-                fields=["download_uuid"], name="albums_down_downloa_7de443_idx"
-            ),
+            model_name='download',
+            index=models.Index(fields=['download_uuid'], name='albums_down_downloa_7de443_idx'),
         ),
     ]

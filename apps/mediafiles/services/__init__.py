@@ -1,14 +1,12 @@
 """
 MediaFiles Services Package
 
-Цей пакет містить всі сервіси для роботи з медіафайлами:
-- MediafileService: Основний сервіс для CRUD операцій з медіафайлами
+This package contains all services for working with media files:
+- MediafileService: Main service for CRUD operations with media files
 """
 
-# Імпорти для зворотної сумісності
-from .mediafile_service import MediafileService
+from apps.mediafiles.services.mediafile_service import MediafileService
 
-# Експортуємо для зручності
 __all__ = [
-    "MediafileService",
+    'MediafileService',
 ]

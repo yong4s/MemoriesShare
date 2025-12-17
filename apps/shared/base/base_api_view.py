@@ -25,4 +25,5 @@ class BaseAPIView(APIView):
         Raises:
             NotImplementedError: If not implemented by subclass
         """
-        raise NotImplementedError("Subclasses must implement get_service()")
+        msg = 'Subclasses must implement get_service()'
+        raise NotImplementedError(msg)

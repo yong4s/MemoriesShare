@@ -30,13 +30,11 @@ class IsEventOwnerOrModerator(BasePermission):
             event = obj
         else:
             # If obj is not Event, try to get event from obj
-            event = getattr(obj, "event", None)
+            event = getattr(obj, 'event', None)
             if not event:
                 return False
 
-        return self._get_permission_service().can_user_modify_event(
-            event, request.user.id
-        )
+        return self._get_permission_service().can_user_modify_event(event, request.user.id)
 
 
 class CanAccessEvent(BasePermission):
@@ -61,13 +59,11 @@ class CanAccessEvent(BasePermission):
             event = obj
         else:
             # If obj is not Event, try to get event from obj
-            event = getattr(obj, "event", None)
+            event = getattr(obj, 'event', None)
             if not event:
                 return False
 
-        return self._get_permission_service().can_user_access_event(
-            event, request.user.id
-        )
+        return self._get_permission_service().can_user_access_event(event, request.user.id)
 
 
 class IsEventOwner(BasePermission):
@@ -92,7 +88,7 @@ class IsEventOwner(BasePermission):
             event = obj
         else:
             # If obj is not Event, try to get event from obj
-            event = getattr(obj, "event", None)
+            event = getattr(obj, 'event', None)
             if not event:
                 return False
 
@@ -121,13 +117,11 @@ class IsEventParticipant(BasePermission):
             event = obj
         else:
             # If obj is not Event, try to get event from obj
-            event = getattr(obj, "event", None)
+            event = getattr(obj, 'event', None)
             if not event:
                 return False
 
-        participation = self._get_permission_service().get_user_participation_in_event(
-            event, request.user
-        )
+        participation = self._get_permission_service().get_user_participation_in_event(event, request.user)
         return participation is not None
 
 
@@ -138,7 +132,7 @@ class EventPermissionMixin:
 
     def get_object(self):
         """Get event object based on URL parameter"""
-        event_uuid = self.kwargs.get("event_uuid")
+        event_uuid = self.kwargs.get('event_uuid')
         if not event_uuid:
             return None
 

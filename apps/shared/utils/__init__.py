@@ -2,7 +2,7 @@
 Utility functions and validators
 """
 
-from .general import *
-from .validators import *
+from apps.shared.utils.general import *
+from apps.shared.utils.validators import *
 
 __all__ = []

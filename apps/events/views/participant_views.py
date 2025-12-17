@@ -14,13 +14,12 @@ from apps.events.serializers import EventParticipantDetailSerializer
 from apps.events.serializers import EventParticipantListSerializer
 from apps.events.serializers import EventParticipantRSVPUpdateSerializer
 from apps.events.serializers import ParticipantListQuerySerializer
-
-from .event_views import BaseEventAPIView
+from apps.events.views.event_views import BaseEventAPIView
 
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Event Participants"])
+@extend_schema(tags=['Event Participants'])
 class EventParticipantListAPIView(BaseEventAPIView, EventPermissionMixin):
     """List event participants"""
 
@@ -34,19 +33,19 @@ class EventParticipantListAPIView(BaseEventAPIView, EventPermissionMixin):
         participants = self.get_event_service().get_event_participants(
             event_uuid=event_uuid,
             requesting_user_id=request.user.id,
-            role_filter=query_serializer.validated_data.get("role"),
-            rsvp_filter=query_serializer.validated_data.get("rsvp_status"),
+            role_filter=query_serializer.validated_data.get('role'),
+            rsvp_filter=query_serializer.validated_data.get('rsvp_status'),
         )
 
         serializer = EventParticipantListSerializer(participants, many=True)
 
         return Response(
-            {"participants": serializer.data, "count": len(participants)},
+            {'participants': serializer.data, 'count': len(participants)},
             status=status.HTTP_200_OK,
         )
 
 
-@extend_schema(tags=["Event Participants"])
+@extend_schema(tags=['Event Participants'])
 class EventParticipantDetailAPIView(BaseEventAPIView, EventPermissionMixin):
     """Get participant details"""
 
@@ -60,13 +59,14 @@ class EventParticipantDetailAPIView(BaseEventAPIView, EventPermissionMixin):
 
         participant = next((p for p in participants if p.id == participant_id), None)
         if not participant:
-            raise NotFound("Participant not found")
+            msg = 'Participant not found'
+            raise NotFound(msg)
 
         serializer = EventParticipantDetailSerializer(participant)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Event Participants"])
+@extend_schema(tags=['Event Participants'])
 class EventParticipantRSVPUpdateAPIView(BaseEventAPIView, EventPermissionMixin):
     """Update participant RSVP status"""
 
@@ -83,24 +83,23 @@ class EventParticipantRSVPUpdateAPIView(BaseEventAPIView, EventPermissionMixin):
 
         participant = next((p for p in participants if p.id == participant_id), None)
         if not participant:
-            raise NotFound("Participant not found")
+            msg = 'Participant not found'
+            raise NotFound(msg)
 
         updated_participation = self.get_event_service().update_participant_rsvp(
             event_uuid=event_uuid,
             user=participant.user,
-            rsvp_status=serializer.validated_data["rsvp_status"],
+            rsvp_status=serializer.validated_data['rsvp_status'],
             requesting_user_id=request.user.id,
         )
 
         response_serializer = EventParticipantDetailSerializer(updated_participation)
 
-        logger.info(
-            f"Updated RSVP for participant {participant.user.id} in event {event_uuid}"
-        )
+        logger.info(f'Updated RSVP for participant {participant.user.id} in event {event_uuid}')
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Event Participants"])
+@extend_schema(tags=['Event Participants'])
 class MyEventRSVPAPIView(BaseEventAPIView, EventPermissionMixin):
     """User's own RSVP management"""
 
@@ -108,16 +107,12 @@ class MyEventRSVPAPIView(BaseEventAPIView, EventPermissionMixin):
 
     def get(self, request, event_uuid):
         """Get current user's RSVP status for event"""
-        event = self.get_event_service().get_event_detail(
-            event_uuid=event_uuid, user_id=request.user.id
-        )
+        event = self.get_event_service().get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
 
-        participation = self.get_event_service().get_user_participation_in_event(
-            event, request.user
-        )
+        participation = self.get_event_service().get_user_participation_in_event(event, request.user)
         if not participation:
             return Response(
-                {"message": "You are not a participant in this event"},
+                {'message': 'You are not a participant in this event'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -132,11 +127,11 @@ class MyEventRSVPAPIView(BaseEventAPIView, EventPermissionMixin):
         updated_participation = self.get_event_service().update_participant_rsvp(
             event_uuid=event_uuid,
             user=request.user,
-            rsvp_status=serializer.validated_data["rsvp_status"],
+            rsvp_status=serializer.validated_data['rsvp_status'],
             requesting_user_id=request.user.id,
         )
 
         response_serializer = EventParticipantDetailSerializer(updated_participation)
 
-        logger.info(f"User {request.user.id} updated own RSVP for event {event_uuid}")
+        logger.info(f'User {request.user.id} updated own RSVP for event {event_uuid}')
         return Response(response_serializer.data, status=status.HTTP_200_OK)

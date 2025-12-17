@@ -22,7 +22,7 @@ env = environ.Env(
     DEBUG=(bool, False),
 )
 # reading .env file
-ENV_FILE_PATH = BASE_DIR / ".env.sample"
+ENV_FILE_PATH = BASE_DIR / '.env.sample'
 
 if ENV_FILE_PATH.exists():
     environ.Env.read_env(str(ENV_FILE_PATH))
@@ -31,40 +31,40 @@ if ENV_FILE_PATH.exists():
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env("SECRET_KEY", default="ek12k!Kkwk1e2kdkskqkNDNhw278AB@)3nas")
+SECRET_KEY = env('SECRET_KEY', default='ek12k!Kkwk1e2kdkskqkNDNhw278AB@)3nas')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env("DEBUG")
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
-DJANGO_ADMINS = ""
-ADMINS = [x.split(":") for x in env.list("DJANGO_ADMINS", default=[])]
+DJANGO_ADMINS = ''
+ADMINS = [x.split(':') for x in env.list('DJANGO_ADMINS', default=[])]
 
 # Application definition
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
 ]
 
-ROOT_URLCONF = "apps.urls"
+ROOT_URLCONF = 'apps.urls'
 
 TEMPLATES = [
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [BASE_DIR / 'templates'],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
             ],
         },
     },
@@ -81,41 +81,41 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 # }
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "postgres",
-        "USER": "postgres",
-        "PASSWORD": "postgres",
-        "HOST": "db",  # назва сервісу PostgreSQL у docker-compose
-        "PORT": "5432",
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres',
+        'PASSWORD': 'postgres',
+        'HOST': 'db',  # PostgreSQL service name in docker-compose
+        'PORT': '5432',
     }
 }
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
     },
     {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = "UTC"
+TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
@@ -126,12 +126,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
-STATIC_URL = "/static/"
+STATIC_URL = '/static/'
 
-MEDIA_ROOT = str(BASE_DIR / "media")
+MEDIA_ROOT = str(BASE_DIR / 'media')
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
-MEDIA_URL = "/media/"
+MEDIA_URL = '/media/'
 
 # Frontend Configuration
-# URL фронтенду для генерації посилань в запрошеннях та QR-кодах
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+# Frontend URL for generating links in invitations and QR codes
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')

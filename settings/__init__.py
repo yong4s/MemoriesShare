@@ -1,5 +1,5 @@
 """Settings package initialization with Celery app."""
 
-from .celery import app as celery_app
+from settings.celery import app as celery_app
 
-__all__ = ("celery_app",)
+__all__ = ('celery_app',)

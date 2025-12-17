@@ -1,5 +1,5 @@
-from ..dal.invite_link_event_dal import InviteLinkEventDAL
-from .event_service import EventService
+from apps.events.dal.invite_link_event_dal import InviteLinkEventDAL
+from apps.events.services.event_service import EventService
 
 
 class InviteLinkService:
@@ -8,4 +8,4 @@ class InviteLinkService:
         self.event_service = event_service or EventService()
 
     def create_event_invite_link(self, event_uuid):
-        event = self
+        pass

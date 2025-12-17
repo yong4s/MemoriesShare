@@ -24,7 +24,7 @@ class DatabaseErrorHandler:
     Preserves error context while providing consistent exception translation.
     """
 
-    def __init__(self, operation_type: str = "database_operation"):
+    def __init__(self, operation_type: str = 'database_operation'):
         self.operation_type = operation_type
         self.error_mappings = {
             IntegrityError: self._handle_integrity_error,
@@ -33,86 +33,78 @@ class DatabaseErrorHandler:
             ObjectDoesNotExist: self._handle_not_found_error,
         }
 
-    def _handle_integrity_error(
-        self, error: IntegrityError, context: dict[str, Any]
-    ) -> ValidationError:
+    def _handle_integrity_error(self, error: IntegrityError, context: dict[str, Any]) -> ValidationError:
         """Handle database integrity constraint violations"""
         logger.warning(
-            f"Integrity constraint violation in {self.operation_type}: {error}",
-            extra={"operation": self.operation_type, "context": context},
+            f'Integrity constraint violation in {self.operation_type}: {error}',
+            extra={'operation': self.operation_type, 'context': context},
         )
         return ValidationError(
-            message=f"Data integrity violation: {error!s}",
-            error_code=f"{self.operation_type}_integrity_error",
+            message=f'Data integrity violation: {error!s}',
+            error_code=f'{self.operation_type}_integrity_error',
             context={
-                "original_error": str(error),
-                "constraint_violation": True,
+                'original_error': str(error),
+                'constraint_violation': True,
                 **context,
             },
         )
 
-    def _handle_validation_error(
-        self, error: DjangoValidationError, context: dict[str, Any]
-    ) -> ValidationError:
+    def _handle_validation_error(self, error: DjangoValidationError, context: dict[str, Any]) -> ValidationError:
         """Handle Django validation errors while preserving field context"""
         logger.warning(
-            f"Validation error in {self.operation_type}: {error}",
-            extra={"operation": self.operation_type, "context": context},
+            f'Validation error in {self.operation_type}: {error}',
+            extra={'operation': self.operation_type, 'context': context},
         )
 
         # Preserve field-specific errors if available
         field_errors = {}
-        if hasattr(error, "error_dict"):
+        if hasattr(error, 'error_dict'):
             field_errors = error.error_dict
-        elif hasattr(error, "error_list"):
-            field_errors = {"non_field_errors": error.error_list}
+        elif hasattr(error, 'error_list'):
+            field_errors = {'non_field_errors': error.error_list}
 
         return ValidationError(
-            message=f"Validation failed: {error!s}",
+            message=f'Validation failed: {error!s}',
             field_errors=field_errors,
-            error_code=f"{self.operation_type}_validation_error",
+            error_code=f'{self.operation_type}_validation_error',
             context={
-                "original_error": str(error),
-                "django_validation": True,
+                'original_error': str(error),
+                'django_validation': True,
                 **context,
             },
         )
 
-    def _handle_database_error(
-        self, error: DatabaseError, context: dict[str, Any]
-    ) -> ServiceUnavailableError:
+    def _handle_database_error(self, error: DatabaseError, context: dict[str, Any]) -> ServiceUnavailableError:
         """Handle general database connectivity/infrastructure errors"""
         logger.critical(
-            f"Database infrastructure error in {self.operation_type}: {error}",
-            extra={"operation": self.operation_type, "context": context},
+            f'Database infrastructure error in {self.operation_type}: {error}',
+            extra={'operation': self.operation_type, 'context': context},
             exc_info=True,
         )
         return ServiceUnavailableError(
-            message="Database service is temporarily unavailable",
-            error_code=f"{self.operation_type}_database_error",
+            message='Database service is temporarily unavailable',
+            error_code=f'{self.operation_type}_database_error',
             context={
-                "original_error": str(error),
-                "infrastructure_failure": True,
+                'original_error': str(error),
+                'infrastructure_failure': True,
                 **context,
             },
         )
 
-    def _handle_not_found_error(
-        self, error: ObjectDoesNotExist, context: dict[str, Any]
-    ) -> ResourceNotFoundError:
+    def _handle_not_found_error(self, error: ObjectDoesNotExist, context: dict[str, Any]) -> ResourceNotFoundError:
         """Handle object not found errors"""
-        model_name = context.get("model_name", "Resource")
-        identifier = context.get("identifier", "unknown")
+        model_name = context.get('model_name', 'Resource')
+        identifier = context.get('identifier', 'unknown')
 
         logger.debug(
-            f"Resource not found in {self.operation_type}: {model_name} {identifier}",
-            extra={"operation": self.operation_type, "context": context},
+            f'Resource not found in {self.operation_type}: {model_name} {identifier}',
+            extra={'operation': self.operation_type, 'context': context},
         )
 
         return ResourceNotFoundError(
-            message=f"{model_name} not found",
-            error_code=f"{model_name.lower()}_not_found",
-            context={"identifier": identifier, "model": model_name, **context},
+            message=f'{model_name} not found',
+            error_code=f'{model_name.lower()}_not_found',
+            context={'identifier': identifier, 'model': model_name, **context},
         )
 
     def handle_exception(self, error: Exception, context: dict[str, Any]) -> Exception:
@@ -126,23 +118,23 @@ class DatabaseErrorHandler:
 
         # For unexpected errors, log and re-raise
         logger.error(
-            f"Unexpected error in {self.operation_type}: {error}",
-            extra={"operation": self.operation_type, "context": context},
+            f'Unexpected error in {self.operation_type}: {error}',
+            extra={'operation': self.operation_type, 'context': context},
             exc_info=True,
         )
 
         return ServiceUnavailableError(
-            message=f"Unexpected database error: {error!s}",
-            error_code=f"{self.operation_type}_unexpected_error",
-            context={"original_error": str(error), "unexpected": True, **context},
+            message=f'Unexpected database error: {error!s}',
+            error_code=f'{self.operation_type}_unexpected_error',
+            context={'original_error': str(error), 'unexpected': True, **context},
         )
 
 
 def handle_db_errors(
-    operation_type: str = None,
-    model_name: str = None,
+    operation_type: str | None = None,
+    model_name: str | None = None,
     preserve_context: bool = True,
-    custom_mappings: dict[type[Exception], Callable] = None,
+    custom_mappings: dict[type[Exception], Callable] | None = None,
 ):
     """
     Decorator for centralized database error handling in DAL methods.
@@ -166,14 +158,14 @@ def handle_db_errors(
             detected_operation = operation_type
             if not detected_operation:
                 method_name = func.__name__.lower()
-                if method_name.startswith("create"):
-                    detected_operation = "create"
-                elif method_name.startswith(("get", "find", "fetch")):
-                    detected_operation = "read"
-                elif method_name.startswith("update"):
-                    detected_operation = "update"
-                elif method_name.startswith("delete"):
-                    detected_operation = "delete"
+                if method_name.startswith('create'):
+                    detected_operation = 'create'
+                elif method_name.startswith(('get', 'find', 'fetch')):
+                    detected_operation = 'read'
+                elif method_name.startswith('update'):
+                    detected_operation = 'update'
+                elif method_name.startswith('delete'):
+                    detected_operation = 'delete'
                 else:
                     detected_operation = method_name
 
@@ -184,30 +176,27 @@ def handle_db_errors(
 
             # Prepare context
             context = {
-                "method": func.__name__,
-                "class": self.__class__.__name__,
-                "operation": detected_operation,
+                'method': func.__name__,
+                'class': self.__class__.__name__,
+                'operation': detected_operation,
             }
 
             if model_name:
-                context["model_name"] = model_name
+                context['model_name'] = model_name
 
             # Add method arguments to context if preserve_context is True
             if preserve_context:
                 # Add non-sensitive argument info
                 if args:
-                    context["args_count"] = len(args)
+                    context['args_count'] = len(args)
                 if kwargs:
                     # Filter out sensitive data like passwords
                     safe_kwargs = {
                         k: v
                         for k, v in kwargs.items()
-                        if not any(
-                            sensitive in k.lower()
-                            for sensitive in ["password", "secret", "token", "key"]
-                        )
+                        if not any(sensitive in k.lower() for sensitive in ['password', 'secret', 'token', 'key'])
                     }
-                    context["kwargs"] = safe_kwargs
+                    context['kwargs'] = safe_kwargs
 
             try:
                 return func(self, *args, **kwargs)
@@ -221,21 +210,21 @@ def handle_db_errors(
 
 
 # Convenience decorators for common operations
-def handle_create_errors(model_name: str = None):
+def handle_create_errors(model_name: str | None = None):
     """Decorator specifically for create operations"""
-    return handle_db_errors(operation_type="create", model_name=model_name)
+    return handle_db_errors(operation_type='create', model_name=model_name)
 
 
-def handle_read_errors(model_name: str = None):
+def handle_read_errors(model_name: str | None = None):
     """Decorator specifically for read operations"""
-    return handle_db_errors(operation_type="read", model_name=model_name)
+    return handle_db_errors(operation_type='read', model_name=model_name)
 
 
-def handle_update_errors(model_name: str = None):
+def handle_update_errors(model_name: str | None = None):
     """Decorator specifically for update operations"""
-    return handle_db_errors(operation_type="update", model_name=model_name)
+    return handle_db_errors(operation_type='update', model_name=model_name)
 
 
-def handle_delete_errors(model_name: str = None):
+def handle_delete_errors(model_name: str | None = None):
     """Decorator specifically for delete operations"""
-    return handle_db_errors(operation_type="delete", model_name=model_name)
+    return handle_db_errors(operation_type='delete', model_name=model_name)

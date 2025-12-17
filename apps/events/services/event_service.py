@@ -47,9 +47,9 @@ class EventService:
         s3_prefix = self._generate_s3_event_prefix(str(user.user_uuid), str(event_uuid))
 
         event_data = validated_data.copy()
-        event_data["event_uuid"] = event_uuid
-        event_data["s3_prefix"] = s3_prefix
-        event_data["user"] = user
+        event_data['event_uuid'] = event_uuid
+        event_data['s3_prefix'] = s3_prefix
+        event_data['user'] = user
 
         try:
             with transaction.atomic():
@@ -57,20 +57,21 @@ class EventService:
                 self._add_owner_participation(event, user)
                 return event
         except Exception as db_error:
-            logger.error(f"Failed to create event in DB: {db_error}")
-            raise EventCreationError(f"Database error: {db_error!s}")
+            logger.exception(f'Failed to create event in DB: {db_error}')
+            msg = f'Database error: {db_error!s}'
+            raise EventCreationError(msg)
 
     def get_event_detail(self, event_uuid: str, user_id: int) -> Event:
         event = self.dal.get_event_by_uuid_optimized(event_uuid)
         if not self.can_user_access_event(event, user_id):
-            raise EventPermissionError(action="access", event_id=event_uuid)
+            raise EventPermissionError(action='access', event_id=event_uuid)
         return event
 
     def get_events_list(self, filters: dict[str, Any], user) -> dict[str, Any]:
-        page = filters.get("page", 1)
-        page_size = min(filters.get("page_size", 20), 100)  # Limit max page size
-        search = filters.get("search", "").strip()
-        owned_only = filters.get("owned_only", False)
+        page = filters.get('page', 1)
+        page_size = min(filters.get('page_size', 20), 100)  # Limit max page size
+        search = filters.get('search', '').strip()
+        owned_only = filters.get('owned_only', False)
 
         if owned_only:
             queryset = self.dal.get_owned_events_queryset(user.id)
@@ -83,63 +84,55 @@ class EventService:
         page_obj = paginator.get_page(page)
 
         return {
-            "events": list(page_obj),
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total_pages": paginator.num_pages,
-                "total_count": paginator.count,
-                "has_next": page_obj.has_next(),
-                "has_previous": page_obj.has_previous(),
+            'events': list(page_obj),
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
             },
         }
 
     @transaction.atomic
-    def update_event(
-        self, event_uuid: str, validated_data: dict[str, Any], user
-    ) -> Event:
-
+    def update_event(self, event_uuid: str, validated_data: dict[str, Any], user) -> Event:
         # DAL now raises EventNotFoundError if event doesn't exist
         event = self.dal.get_event_by_uuid(event_uuid)
 
         if not self.can_user_modify_event(event, user.id):
-            raise EventPermissionError(action="modify", event_id=event_uuid)
+            raise EventPermissionError(action='modify', event_id=event_uuid)
 
         updated_event = self.dal.update_event(event, validated_data)
 
         transaction.on_commit(
-            lambda: self._invalidate_caches(
-                event_uuid, user.id, ["detail", "statistics"], ["events"]
-            )
+            lambda: self._invalidate_caches(event_uuid, user.id, ['detail', 'statistics'], ['events'])
         )
 
         return updated_event
 
     @transaction.atomic
     def delete_event(self, event_uuid: str, user_id: int) -> bool:
-
         # DAL now raises EventNotFoundError if event doesn't exist
         event = self.dal.get_event_by_uuid(event_uuid)
 
         if not self.is_event_owner(event, user_id):
-            raise EventPermissionError(action="delete", event_id=event_uuid)
+            raise EventPermissionError(action='delete', event_id=event_uuid)
 
         result = self.dal.delete_event(event)
 
         try:
             self.s3_service.delete_folder(event.s3_prefix)
-            logger.debug(f"Successfully cleaned up S3 folder for event {event_uuid}")
+            logger.debug(f'Successfully cleaned up S3 folder for event {event_uuid}')
         except Exception as s3_error:
-            logger.warning(
-                f"Non-critical: Failed to delete S3 folder for event {event_uuid}: {s3_error}"
-            )
+            logger.warning(f'Non-critical: Failed to delete S3 folder for event {event_uuid}: {s3_error}')
 
         transaction.on_commit(
             lambda: self._invalidate_caches(
                 event_uuid,
                 user_id,
-                ["detail", "statistics", "participants"],
-                ["events", "analytics"],
+                ['detail', 'statistics', 'participants'],
+                ['events', 'analytics'],
             )
         )
 
@@ -152,16 +145,13 @@ class EventService:
         role_filter: str | None = None,
         rsvp_filter: str | None = None,
     ) -> list[EventParticipant]:
-
         # DAL now raises EventNotFoundError if event doesn't exist
         event = self.dal.get_event_by_uuid(event_uuid)
 
         if not self.can_user_access_event(event, requesting_user_id):
-            raise EventPermissionError(action="access", event_id=event_uuid)
+            raise EventPermissionError(action='access', event_id=event_uuid)
 
-        return self.participant_dal.get_event_participants(
-            event, role_filter, rsvp_filter
-        )
+        return self.participant_dal.get_event_participants(event, role_filter, rsvp_filter)
 
     @transaction.atomic
     def add_participant_to_event(
@@ -169,57 +159,56 @@ class EventService:
         event_uuid: str,
         user,
         role: str = EventParticipant.Role.GUEST,
-        guest_name: str = "",
-        guest_email: str = "",
-        requesting_user_id: int = None,
-        invite_token: str = None,
+        guest_name: str = '',
+        guest_email: str = '',
+        requesting_user_id: int | None = None,
+        invite_token: str | None = None,
     ) -> EventParticipant:
-
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
-            raise EventNotFoundError(f"Event {event_uuid} not found")
+            msg = f'Event {event_uuid} not found'
+            raise EventNotFoundError(msg)
 
-        if (
-            requesting_user_id
-            and not invite_token
-            and not self.can_user_modify_event(event, requesting_user_id)
-        ):
-            raise EventPermissionError("You cannot add participants to this event")
+        if requesting_user_id and not invite_token and not self.can_user_modify_event(event, requesting_user_id):
+            msg = 'You cannot add participants to this event'
+            raise EventPermissionError(msg)
 
         if self.participant_dal.is_user_participant(event, user):
-            raise ParticipantError("User is already a participant in this event")
+            msg = 'User is already a participant in this event'
+            raise ParticipantError(msg)
 
         participation_data = {
-            "event": event,
-            "user": user,
-            "role": role,
-            "guest_name": guest_name or user.display_name,
-            "guest_email": guest_email or getattr(user, "email", ""),
-            "invite_token_used": invite_token,
-            "rsvp_status": EventParticipant.RsvpStatus.PENDING,
+            'event': event,
+            'user': user,
+            'role': role,
+            'guest_name': guest_name or user.display_name,
+            'guest_email': guest_email or getattr(user, 'email', ''),
+            'invite_token_used': invite_token,
+            'rsvp_status': EventParticipant.RsvpStatus.PENDING,
         }
 
         return self.participant_dal.create_participant(participation_data)
 
     @transaction.atomic
-    def remove_participant_from_event(
-        self, event_uuid: str, user, requesting_user_id: int
-    ) -> bool:
-
+    def remove_participant_from_event(self, event_uuid: str, user, requesting_user_id: int) -> bool:
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
-            raise EventNotFoundError(f"Event {event_uuid} not found")
+            msg = f'Event {event_uuid} not found'
+            raise EventNotFoundError(msg)
 
         # Permission check
         if not self.can_user_modify_event(event, requesting_user_id):
-            raise EventPermissionError("You cannot remove participants from this event")
+            msg = 'You cannot remove participants from this event'
+            raise EventPermissionError(msg)
 
         if self.is_event_owner(event, user.id):
-            raise ParticipantError("Cannot remove event owner from event")
+            msg = 'Cannot remove event owner from event'
+            raise ParticipantError(msg)
 
         participation = self.participant_dal.get_user_participation(event, user)
         if not participation:
-            raise ParticipantError("User is not a participant in this event")
+            msg = 'User is not a participant in this event'
+            raise ParticipantError(msg)
 
         return self.participant_dal.remove_participant(participation)
 
@@ -229,16 +218,17 @@ class EventService:
     ) -> EventParticipant:
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
-            raise EventNotFoundError(f"Event {event_uuid} not found")
+            msg = f'Event {event_uuid} not found'
+            raise EventNotFoundError(msg)
 
         participation = self.participant_dal.get_user_participation(event, user)
         if not participation:
-            raise ParticipantError("User is not a participant in this event")
+            msg = 'User is not a participant in this event'
+            raise ParticipantError(msg)
 
-        if requesting_user_id != user.id and not self.is_event_owner(
-            event, requesting_user_id
-        ):
-            raise EventPermissionError("You can only update your own RSVP status")
+        if requesting_user_id != user.id and not self.is_event_owner(event, requesting_user_id):
+            msg = 'You can only update your own RSVP status'
+            raise EventPermissionError(msg)
 
         return self.participant_dal.update_participant_rsvp(participation, rsvp_status)
 
@@ -255,16 +245,16 @@ class EventService:
 
         event = self.dal.get_event_by_uuid(event_uuid)
         if not event:
-            raise EventNotFoundError(f"Event {event_uuid} not found")
+            msg = f'Event {event_uuid} not found'
+            raise EventNotFoundError(msg)
 
         if not self.can_user_modify_event(event, requesting_user_id):
-            raise EventPermissionError("You cannot invite guests to this event")
+            msg = 'You cannot invite guests to this event'
+            raise EventPermissionError(msg)
 
         self._validate_event_status(event)
 
-        guest_user = user_service.create_guest_user(
-            guest_name=guest_name, guest_email=guest_email
-        )
+        guest_user = user_service.create_guest_user(guest_name=guest_name, guest_email=guest_email)
 
         participation = self.add_participant_to_event(
             event_uuid=event_uuid,
@@ -290,64 +280,56 @@ class EventService:
         if event.user_id == user_id:
             return True
 
-        participation = self.participant_dal.get_user_participation_by_id(
-            event, user_id
-        )
-        return participation and participation.role == "MODERATOR"
+        participation = self.participant_dal.get_user_participation_by_id(event, user_id)
+        return participation and participation.role == 'MODERATOR'
 
     def is_event_owner(self, event: Event, user_id: int) -> bool:
         """Check if user is event owner"""
         return event.user_id == user_id
 
-    def _validate_guest_invitation_data(
-        self, guest_name: str, guest_email: str
-    ) -> None:
-
+    def _validate_guest_invitation_data(self, guest_name: str, guest_email: str) -> None:
         errors = []
 
         if not guest_name or not guest_name.strip():
-            errors.append("Guest name is required")
+            errors.append('Guest name is required')
         elif len(guest_name.strip()) < 2:
-            errors.append("Guest name must be at least 2 characters long")
+            errors.append('Guest name must be at least 2 characters long')
         elif len(guest_name.strip()) > 255:
-            errors.append("Guest name cannot exceed 255 characters")
-        elif not re.match(
-            r"^[a-zA-Z\s\u0100-\u017F\u0400-\u04FF\'.-]+$", guest_name.strip()
-        ):
-            errors.append("Guest name contains invalid characters")
+            errors.append('Guest name cannot exceed 255 characters')
+        elif not re.match(r'^[a-zA-Z\s\u0100-\u017F\u0400-\u04FF\'.-]+$', guest_name.strip()):
+            errors.append('Guest name contains invalid characters')
 
         if guest_email and guest_email.strip():
-            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if not re.match(email_pattern, guest_email.strip()):
-                errors.append("Guest email format is invalid")
+                errors.append('Guest email format is invalid')
             elif len(guest_email.strip()) > 254:
-                errors.append("Guest email cannot exceed 254 characters")
+                errors.append('Guest email cannot exceed 254 characters')
 
         if errors:
-            raise EventValidationError(
-                f'Guest invitation validation failed: {", ".join(errors)}'
-            )
+            msg = f'Guest invitation validation failed: {', '.join(errors)}'
+            raise EventValidationError(msg)
 
     def _validate_event_status(self, event: Event) -> None:
-
         if event.date < timezone.now().date():
-            raise EventValidationError("Cannot invite guests to past events")
+            msg = 'Cannot invite guests to past events'
+            raise EventValidationError(msg)
 
     def _add_owner_participation(self, event: Event, user) -> EventParticipant:
         """Add event creator as owner participant"""
         participation_data = {
-            "event": event,
-            "user": user,
-            "role": EventParticipant.Role.OWNER,
-            "guest_name": user.display_name,
-            "guest_email": getattr(user, "email", ""),
-            "rsvp_status": EventParticipant.RsvpStatus.ACCEPTED,
+            'event': event,
+            'user': user,
+            'role': EventParticipant.Role.OWNER,
+            'guest_name': user.display_name,
+            'guest_email': getattr(user, 'email', ''),
+            'rsvp_status': EventParticipant.RsvpStatus.ACCEPTED,
         }
         return self.participant_dal.create_participant(participation_data)
 
     def _generate_s3_event_prefix(self, user_uuid, event_uuid):
         """Generate S3 event prefix (folder created lazily on first file upload)"""
-        return f"users/{user_uuid}/events/{event_uuid}"
+        return f'users/{user_uuid}/events/{event_uuid}'
 
     def _invalidate_caches(
         self,
@@ -362,4 +344,4 @@ class EventService:
             for cache_type in user_cache_types:
                 self.cache_manager.invalidate_user_cache(user_id, cache_type)
         except Exception as e:
-            logger.warning(f"Cache invalidation failed for event {event_uuid}: {e}")
+            logger.warning(f'Cache invalidation failed for event {event_uuid}: {e}')

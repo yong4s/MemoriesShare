@@ -8,34 +8,31 @@ from django.db import models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("events", "0003_remove_event_user_alter_event_event_uuid"),
+        ('events', '0003_remove_event_user_alter_event_event_uuid'),
     ]
 
     operations = [
         migrations.CreateModel(
-            name="InviteEventLink",
+            name='InviteEventLink',
             fields=[
                 (
-                    "id",
+                    'id',
                     models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
-                        verbose_name="ID",
+                        verbose_name='ID',
                     ),
                 ),
-                ("invite_token", models.UUIDField(default=uuid.uuid4, unique=True)),
-                ("max_uses", models.PositiveIntegerField(default=1)),
-                ("used_count", models.PositiveIntegerField(default=0)),
-                ("expires_at", models.DateTimeField(blank=True, null=True)),
-                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ('invite_token', models.UUIDField(default=uuid.uuid4, unique=True)),
+                ('max_uses', models.PositiveIntegerField(default=1)),
+                ('used_count', models.PositiveIntegerField(default=0)),
+                ('expires_at', models.DateTimeField(blank=True, null=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
                 (
-                    "event",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="events.event"
-                    ),
+                    'event',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='events.event'),
                 ),
             ],
         ),

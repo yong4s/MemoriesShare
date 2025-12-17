@@ -5,21 +5,18 @@ from django.db import models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("events", "0002_event_s3_prefix"),
+        ('events', '0002_event_s3_prefix'),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name="event",
-            name="user",
+            model_name='event',
+            name='user',
         ),
         migrations.AlterField(
-            model_name="event",
-            name="event_uuid",
-            field=models.UUIDField(
-                db_index=True, editable=False, unique=True, verbose_name="Event UUID"
-            ),
+            model_name='event',
+            name='event_uuid',
+            field=models.UUIDField(db_index=True, editable=False, unique=True, verbose_name='Event UUID'),
         ),
     ]

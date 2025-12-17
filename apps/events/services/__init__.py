@@ -1,11 +1,11 @@
 """Events services package."""
 
-from .event_service import EventService
-from .participant_service import EventParticipantService
-from .permission_service import EventPermissionService
+from apps.events.services.event_service import EventService
+from apps.events.services.participant_service import EventParticipantService
+from apps.events.services.permission_service import EventPermissionService
 
 __all__ = [
-    "EventService",
-    "EventPermissionService",
-    "EventParticipantService",
+    'EventParticipantService',
+    'EventPermissionService',
+    'EventService',
 ]

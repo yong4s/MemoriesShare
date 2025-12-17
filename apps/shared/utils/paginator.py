@@ -9,7 +9,6 @@ from django.db.models import QuerySet
 
 
 class ServicePaginator:
-
     def __init__(self, default_page_size: int = 20, max_page_size: int = 100):
         self.default_page_size = default_page_size
         self.max_page_size = max_page_size
@@ -21,14 +20,14 @@ class ServicePaginator:
         page_obj = paginator.get_page(page)
 
         return {
-            "items": list(page_obj),
-            "meta": {
-                "page": page_obj.number,
-                "page_size": page_size,
-                "total_pages": paginator.num_pages,
-                "total_items": paginator.count,
-                "has_next": page_obj.has_next(),
-                "has_previous": page_obj.has_previous(),
+            'items': list(page_obj),
+            'meta': {
+                'page': page_obj.number,
+                'page_size': page_size,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
             },
         }
 

@@ -31,7 +31,7 @@ class BaseUserAPIView(BaseAPIView):
         return self._auth_service or AuthService()
 
 
-@extend_schema(tags=["Authentication"])
+@extend_schema(tags=['Authentication'])
 class UserProfileView(BaseUserAPIView):
     """User profile management"""
 
@@ -44,26 +44,22 @@ class UserProfileView(BaseUserAPIView):
 
     def put(self, request):
         """Update current user profile"""
-        serializer = UserProfileSerializer(
-            request.user, data=request.data, partial=True
-        )
+        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
 
         if serializer.is_valid():
             try:
-                updated_user = self.get_service().update_user_profile(
-                    user=request.user, **serializer.validated_data
-                )
+                updated_user = self.get_service().update_user_profile(user=request.user, **serializer.validated_data)
 
-                logger.info(f"User {request.user.email} updated profile")
+                logger.info(f'User {request.user.email} updated profile')
                 return Response(UserProfileSerializer(updated_user).data)
 
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@extend_schema(tags=["Authentication"])
+@extend_schema(tags=['Authentication'])
 class PasswordChangeView(BaseUserAPIView):
     """Change user password"""
 
@@ -71,31 +67,28 @@ class PasswordChangeView(BaseUserAPIView):
 
     def post(self, request):
         """Change current user password"""
-        serializer = PasswordChangeSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
             try:
                 success = self.get_auth_service().change_password(
                     user=request.user,
-                    old_password=serializer.validated_data["old_password"],
-                    new_password=serializer.validated_data["new_password"],
+                    old_password=serializer.validated_data['old_password'],
+                    new_password=serializer.validated_data['new_password'],
                 )
 
                 if success:
-                    logger.info(f"User {request.user.email} changed password")
+                    logger.info(f'User {request.user.email} changed password')
                     return Response(
-                        {"message": "Password changed successfully"},
+                        {'message': 'Password changed successfully'},
                         status=status.HTTP_200_OK,
                     )
-                else:
-                    return Response(
-                        {"error": "Failed to change password"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                return Response(
+                    {'error': 'Failed to change password'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

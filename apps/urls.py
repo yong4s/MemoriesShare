@@ -26,23 +26,21 @@ from settings import base
 
 urlpatterns = [
     # Admin and Documentation
-    path("admin/", admin.site.urls),
-    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+    path('admin/', admin.site.urls),
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     # API Documentation
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "swagger/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"
-    ),
-    path("redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     # Core API Routes - CLEAN SEPARATION
-    path("api/events/", include("apps.events.urls")),  # Events CRUD
-    path("api/albums/", include("apps.albums.urls")),  # Albums CRUD
-    path("api/mediafiles/", include("apps.mediafiles.urls")),  # MediaFiles CRUD
-    path("api/accounts/", include("apps.accounts.urls")),  # User management + Guests
+    path('api/events/', include('apps.events.urls')),  # Events CRUD
+    path('api/albums/', include('apps.albums.urls')),  # Albums CRUD
+    path('api/mediafiles/', include('apps.mediafiles.urls')),  # MediaFiles CRUD
+    path('api/accounts/', include('apps.accounts.urls')),  # User management + Guests
     # Specialized Routes
     # path('invites/', include('apps.accounts.invite_urls')),     # QR-код запрошення (TODO: Fix EventInvite)
     # Authentication
-    path("accounts/", include("allauth.urls")),  # Django AllAuth URLs
+    path('accounts/', include('allauth.urls')),  # Django AllAuth URLs
 ]
 
 if base.DEBUG:

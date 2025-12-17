@@ -38,7 +38,7 @@ class BaseEventAPIView(BaseAPIView):
         return self._user_service
 
 
-@extend_schema(tags=["Events"])
+@extend_schema(tags=['Events'])
 class EventCreateAPIView(BaseEventAPIView):
     """Create new event"""
 
@@ -50,15 +50,13 @@ class EventCreateAPIView(BaseEventAPIView):
         serializer = EventCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        event = self.get_event_service().create_event(
-            validated_data=serializer.validated_data, user=request.user
-        )
+        event = self.get_event_service().create_event(validated_data=serializer.validated_data, user=request.user)
 
         response_serializer = EventCreatedResponseSerializer(event)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
-@extend_schema(tags=["Events"])
+@extend_schema(tags=['Events'])
 class EventListAPIView(BaseEventAPIView):
     """List all available events"""
 
@@ -73,16 +71,16 @@ class EventListAPIView(BaseEventAPIView):
             filters=query_serializer.validated_data, user=request.user
         )
 
-        events_serializer = EventListSerializer(events_data["events"], many=True)
+        events_serializer = EventListSerializer(events_data['events'], many=True)
 
         response_data = {
-            "events": events_serializer.data,
-            "pagination": events_data["pagination"],
+            'events': events_serializer.data,
+            'pagination': events_data['pagination'],
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Events"])
+@extend_schema(tags=['Events'])
 class MyEventsAPIView(BaseEventAPIView):
     """Get current user's events (owned and participating)"""
 
@@ -95,22 +93,20 @@ class MyEventsAPIView(BaseEventAPIView):
 
         # Force owned_only to True for this endpoint
         filters = query_serializer.validated_data.copy()
-        filters["owned_only"] = True
+        filters['owned_only'] = True
 
-        events_data = self.get_event_service().get_events_list(
-            filters=filters, user=request.user
-        )
+        events_data = self.get_event_service().get_events_list(filters=filters, user=request.user)
 
-        events_serializer = EventListSerializer(events_data["events"], many=True)
+        events_serializer = EventListSerializer(events_data['events'], many=True)
 
         response_data = {
-            "events": events_serializer.data,
-            "pagination": events_data["pagination"],
+            'events': events_serializer.data,
+            'pagination': events_data['pagination'],
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Events"])
+@extend_schema(tags=['Events'])
 class EventDetailAPIView(BaseEventAPIView, EventPermissionMixin):
     """Get event details"""
 
@@ -118,16 +114,13 @@ class EventDetailAPIView(BaseEventAPIView, EventPermissionMixin):
 
     def get(self, request, event_uuid):
         """Get detailed event information"""
-        event = self.get_event_service().get_event_detail(
-            event_uuid=event_uuid, user_id=request.user.id
-        )
+        event = self.get_event_service().get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
         serializer = EventDetailSerializer(event)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Events"])
+@extend_schema(tags=['Events'])
 class EventUpdateAPIView(BaseEventAPIView, EventPermissionMixin):
-
     permission_classes = [IsAuthenticated, IsEventOwner]
 
     def put(self, request, event_uuid):
@@ -145,14 +138,11 @@ class EventUpdateAPIView(BaseEventAPIView, EventPermissionMixin):
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
-@extend_schema(tags=["Events"])
+@extend_schema(tags=['Events'])
 class EventDeleteAPIView(BaseEventAPIView, EventPermissionMixin):
-
     permission_classes = [IsAuthenticated, IsEventOwner]
 
     def delete(self, request, event_uuid):
         """Delete event and all associated data"""
-        self.get_event_service().delete_event(
-            event_uuid=event_uuid, user_id=request.user.id
-        )
+        self.get_event_service().delete_event(event_uuid=event_uuid, user_id=request.user.id)
         return Response(status=status.HTTP_204_NO_CONTENT)

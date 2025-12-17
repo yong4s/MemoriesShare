@@ -97,10 +97,9 @@ class SimplePermissionValidator(IPermissionValidator):
         logger = logging.getLogger(__name__)
 
         if not self.is_event_owner(event, user_id):
-            logger.warning(
-                f"User {user_id} attempted to access event {event.id} without ownership"
-            )
-            raise PermissionDenied("You do not have permission to access this event")
+            logger.warning(f'User {user_id} attempted to access event {event.id} without ownership')
+            msg = 'You do not have permission to access this event'
+            raise PermissionDenied(msg)
 
         return True
 
@@ -113,10 +112,9 @@ class SimplePermissionValidator(IPermissionValidator):
         logger = logging.getLogger(__name__)
 
         if not self.has_event_access(event, user_id):
-            logger.warning(
-                f"User {user_id} attempted to access event {event.id} without permission"
-            )
-            raise PermissionDenied("You do not have permission to access this event")
+            logger.warning(f'User {user_id} attempted to access event {event.id} without permission')
+            msg = 'You do not have permission to access this event'
+            raise PermissionDenied(msg)
 
         return True
 
@@ -126,9 +124,9 @@ class SimplePermissionValidator(IPermissionValidator):
             return False
 
         # Direct ownership check using legacy user field or participant relationship
-        if hasattr(event, "user_id") and event.user_id:
+        if hasattr(event, 'user_id') and event.user_id:
             return event.user_id == user_id
-        elif hasattr(event, "user") and event.user:
+        if hasattr(event, 'user') and event.user:
             return event.user.pk == user_id
 
         return False
@@ -139,7 +137,7 @@ class SimplePermissionValidator(IPermissionValidator):
             return False
 
         # Public events are accessible to everyone
-        if getattr(event, "is_public", False):
+        if getattr(event, 'is_public', False):
             return True
 
         if not user_id:
@@ -154,9 +152,7 @@ class SimplePermissionValidator(IPermissionValidator):
             # Try to use the EventParticipant relationship
             from apps.events.models.event_participant import EventParticipant
 
-            return EventParticipant.objects.filter(
-                event=event, user_id=user_id
-            ).exists()
+            return EventParticipant.objects.filter(event=event, user_id=user_id).exists()
         except Exception:
             # Fallback: if we can't check participants, deny access
             return False

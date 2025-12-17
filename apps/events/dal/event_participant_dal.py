@@ -29,84 +29,79 @@ logger = logging.getLogger(__name__)
 class EventParticipantDAL:
     """Data Access Layer for EventParticipant model operations only"""
 
-    def create_participant(
-        self, participation_data: dict[str, Any]
-    ) -> EventParticipant:
+    def create_participant(self, participation_data: dict[str, Any]) -> EventParticipant:
         """Create new participant with exception translation"""
         try:
             return EventParticipant.objects.create(**participation_data)
         except IntegrityError as e:
             # Check if it's a unique constraint violation (duplicate participant)
-            if "unique_together" in str(e).lower() or "duplicate" in str(e).lower():
-                user = participation_data.get("user")
-                user_id = user.id if user else "unknown"
-                logger.warning(
-                    f"Duplicate participant creation attempt for user {user_id}"
-                )
+            if 'unique_together' in str(e).lower() or 'duplicate' in str(e).lower():
+                user = participation_data.get('user')
+                user_id = user.id if user else 'unknown'
+                logger.warning(f'Duplicate participant creation attempt for user {user_id}')
                 raise DuplicateParticipantError(user_identifier=str(user_id))
-            else:
-                logger.error(f"Participant creation failed - integrity error: {e}")
-                raise ValidationError(f"Participant creation validation failed: {e!s}")
+            logger.exception(f'Participant creation failed - integrity error: {e}')
+            msg = f'Participant creation validation failed: {e!s}'
+            raise ValidationError(msg)
         except DjangoValidationError as e:
-            logger.error(f"Participant creation failed - validation error: {e}")
-            raise ValidationError(f"Participant data validation failed: {e!s}")
+            logger.exception(f'Participant creation failed - validation error: {e}')
+            msg = f'Participant data validation failed: {e!s}'
+            raise ValidationError(msg)
         except DatabaseError as e:
-            logger.error(f"Participant creation failed - database error: {e}")
-            raise ServiceUnavailableError(f"Database service unavailable: {e!s}")
+            logger.exception(f'Participant creation failed - database error: {e}')
+            msg = f'Database service unavailable: {e!s}'
+            raise ServiceUnavailableError(msg)
         except Exception as e:
-            logger.error(f"Participant creation failed - unexpected error: {e}")
-            raise ServiceUnavailableError(
-                f"Unexpected error during participant creation: {e!s}"
-            )
+            logger.exception(f'Participant creation failed - unexpected error: {e}')
+            msg = f'Unexpected error during participant creation: {e!s}'
+            raise ServiceUnavailableError(msg)
 
     def get_user_participation(self, event: Event, user) -> EventParticipant:
         """Get user's participation in event with exception translation"""
         try:
             return EventParticipant.objects.get(event=event, user=user)
         except EventParticipant.DoesNotExist:
-            logger.debug(
-                f"Participant not found for user {user.id} in event {event.event_uuid}"
-            )
-            raise ParticipantNotFoundError(participant_identifier=f"user_{user.id}")
+            logger.debug(f'Participant not found for user {user.id} in event {event.event_uuid}')
+            raise ParticipantNotFoundError(participant_identifier=f'user_{user.id}')
         except DatabaseError as e:
-            logger.error(f"Database error while fetching participant: {e}")
-            raise ServiceUnavailableError(f"Database service unavailable: {e!s}")
+            logger.exception(f'Database error while fetching participant: {e}')
+            msg = f'Database service unavailable: {e!s}'
+            raise ServiceUnavailableError(msg)
         except Exception as e:
-            logger.error(f"Unexpected error while fetching participant: {e}")
-            raise ServiceUnavailableError(f"Unexpected database error: {e!s}")
+            logger.exception(f'Unexpected error while fetching participant: {e}')
+            msg = f'Unexpected database error: {e!s}'
+            raise ServiceUnavailableError(msg)
 
-    def get_user_participation_by_id(
-        self, event: Event, user_id: int
-    ) -> EventParticipant | None:
+    def get_user_participation_by_id(self, event: Event, user_id: int) -> EventParticipant | None:
         """Get user's participation by user ID - returns None if not found (no exception)"""
         try:
             return EventParticipant.objects.get(event=event, user_id=user_id)
         except EventParticipant.DoesNotExist:
             return None
         except DatabaseError as e:
-            logger.error(f"Database error while fetching participant by ID: {e}")
-            raise ServiceUnavailableError(f"Database service unavailable: {e!s}")
+            logger.exception(f'Database error while fetching participant by ID: {e}')
+            msg = f'Database service unavailable: {e!s}'
+            raise ServiceUnavailableError(msg)
         except Exception as e:
-            logger.error(f"Unexpected error while fetching participant by ID: {e}")
-            raise ServiceUnavailableError(f"Unexpected database error: {e!s}")
+            logger.exception(f'Unexpected error while fetching participant by ID: {e}')
+            msg = f'Unexpected database error: {e!s}'
+            raise ServiceUnavailableError(msg)
 
-    def get_user_participation_by_id_strict(
-        self, event: Event, user_id: int
-    ) -> EventParticipant:
+    def get_user_participation_by_id_strict(self, event: Event, user_id: int) -> EventParticipant:
         """Get user's participation by user ID - raises exception if not found"""
         try:
             return EventParticipant.objects.get(event=event, user_id=user_id)
         except EventParticipant.DoesNotExist:
-            logger.debug(
-                f"Participant not found for user {user_id} in event {event.event_uuid}"
-            )
-            raise ParticipantNotFoundError(participant_identifier=f"user_{user_id}")
+            logger.debug(f'Participant not found for user {user_id} in event {event.event_uuid}')
+            raise ParticipantNotFoundError(participant_identifier=f'user_{user_id}')
         except DatabaseError as e:
-            logger.error(f"Database error while fetching participant by ID: {e}")
-            raise ServiceUnavailableError(f"Database service unavailable: {e!s}")
+            logger.exception(f'Database error while fetching participant by ID: {e}')
+            msg = f'Database service unavailable: {e!s}'
+            raise ServiceUnavailableError(msg)
         except Exception as e:
-            logger.error(f"Unexpected error while fetching participant by ID: {e}")
-            raise ServiceUnavailableError(f"Unexpected database error: {e!s}")
+            logger.exception(f'Unexpected error while fetching participant by ID: {e}')
+            msg = f'Unexpected database error: {e!s}'
+            raise ServiceUnavailableError(msg)
 
     def is_user_participant(self, event: Event, user) -> bool:
         """Check if user is participant in event"""
@@ -123,7 +118,7 @@ class EventParticipantDAL:
         rsvp_filter: str | None = None,
     ) -> list[EventParticipant]:
         """Get event participants with optional filters"""
-        queryset = EventParticipant.objects.filter(event=event).select_related("user")
+        queryset = EventParticipant.objects.filter(event=event).select_related('user')
 
         if role_filter:
             queryset = queryset.filter(role=role_filter)
@@ -131,14 +126,12 @@ class EventParticipantDAL:
         if rsvp_filter:
             queryset = queryset.filter(rsvp_status=rsvp_filter)
 
-        return list(queryset.order_by("created_at"))
+        return list(queryset.order_by('created_at'))
 
-    def update_participant_rsvp(
-        self, participation: EventParticipant, rsvp_status: str
-    ) -> EventParticipant:
+    def update_participant_rsvp(self, participation: EventParticipant, rsvp_status: str) -> EventParticipant:
         """Update participant RSVP status"""
         participation.rsvp_status = rsvp_status
-        participation.save(update_fields=["rsvp_status", "updated_at"])
+        participation.save(update_fields=['rsvp_status', 'updated_at'])
         return participation
 
     def remove_participant(self, participation: EventParticipant) -> bool:
@@ -151,24 +144,18 @@ class EventParticipantDAL:
         """Get total participants count for event"""
         return EventParticipant.objects.filter(event=event).count()
 
-    def get_participants_by_role(
-        self, event: Event, role: str
-    ) -> list[EventParticipant]:
+    def get_participants_by_role(self, event: Event, role: str) -> list[EventParticipant]:
         """Get participants by role"""
         return list(
-            EventParticipant.objects.filter(event=event, role=role)
-            .select_related("user")
-            .order_by("created_at")
+            EventParticipant.objects.filter(event=event, role=role).select_related('user').order_by('created_at')
         )
 
-    def get_participants_by_rsvp(
-        self, event: Event, rsvp_status: str
-    ) -> list[EventParticipant]:
+    def get_participants_by_rsvp(self, event: Event, rsvp_status: str) -> list[EventParticipant]:
         """Get participants by RSVP status"""
         return list(
             EventParticipant.objects.filter(event=event, rsvp_status=rsvp_status)
-            .select_related("user")
-            .order_by("created_at")
+            .select_related('user')
+            .order_by('created_at')
         )
 
     def get_user_events_as_participant(self, user_id: int) -> list[Event]:
@@ -176,6 +163,6 @@ class EventParticipantDAL:
         return list(
             Event.objects.filter(participants_through__user_id=user_id)
             .distinct()
-            .select_related("user")
-            .order_by("-created_at")
+            .select_related('user')
+            .order_by('-created_at')
         )

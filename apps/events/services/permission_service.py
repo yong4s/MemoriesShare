@@ -30,55 +30,46 @@ class EventPermissionService(IPermissionValidator):
     # PERMISSION VALIDATION (main methods)
     # =============================================================================
 
-    def validate_event_access(
-        self, event: Any, user_id: int, required_permission: str = "access"
-    ) -> bool:
+    def validate_event_access(self, event: Any, user_id: int, required_permission: str = 'access') -> bool:
         """Validate event access"""
         if not user_id:
-            logger.warning("Access attempt without user ID")
+            logger.warning('Access attempt without user ID')
             raise EventPermissionError(action=required_permission)
 
         has_permission = self._check_permission(event, user_id, required_permission)
 
         if not has_permission:
             logger.warning(
-                f"Permission denied for user {user_id}, event {event.event_uuid}, permission {required_permission}"
+                f'Permission denied for user {user_id}, event {event.event_uuid}, permission {required_permission}'
             )
-            raise EventPermissionError(
-                action=required_permission, event_id=str(event.event_uuid)
-            )
+            raise EventPermissionError(action=required_permission, event_id=str(event.event_uuid))
 
         return True
 
     def _check_permission(self, event, user_id, required_permission):
         """Internal permission checking logic"""
-        if required_permission == "owner":
+        if required_permission == 'owner':
             return self.is_event_owner(event, user_id)
-        elif required_permission == "guest":
+        if required_permission == 'guest':
             return self.is_event_guest(event, user_id)
-        elif required_permission == "access":
+        if required_permission == 'access':
             return self.has_event_access(event, user_id)
-        else:
-            logger.error(f"Unknown permission type: {required_permission}")
-            return False
+        logger.error(f'Unknown permission type: {required_permission}')
+        return False
 
     def validate_owner_access(self, event, user_id):
         """Validate that user is event owner (raises PermissionDenied if not)"""
-        return self.validate_event_access(event, user_id, "owner")
+        return self.validate_event_access(event, user_id, 'owner')
 
     def validate_guest_or_owner_access(self, event, user_id):
         """Validate that user is owner or guest (raises PermissionDenied if not)"""
-        return self.validate_event_access(event, user_id, "access")
+        return self.validate_event_access(event, user_id, 'access')
 
     def validate_event_ownership(self, event, user_id):
         """Legacy validation method - use validate_owner_access instead"""
         if not self.is_event_owner(event, user_id):
-            logger.warning(
-                f"User {user_id} tried to access event {event.id} without ownership"
-            )
-            raise EventPermissionError(
-                action="ownership", event_id=str(event.event_uuid)
-            )
+            logger.warning(f'User {user_id} tried to access event {event.id} without ownership')
+            raise EventPermissionError(action='ownership', event_id=str(event.event_uuid))
 
     # =============================================================================
     # PERMISSION CHECKING (boolean returns)
@@ -88,9 +79,7 @@ class EventPermissionService(IPermissionValidator):
         """Check if user is event owner via EventParticipant"""
         if not event or not user_id:
             return False
-        participation = self.participant_dal.get_user_participation_by_id(
-            event, user_id
-        )
+        participation = self.participant_dal.get_user_participation_by_id(event, user_id)
         return participation and participation.role == EventParticipant.Role.OWNER
 
     def is_event_guest(self, event, user_id):
@@ -110,9 +99,7 @@ class EventPermissionService(IPermissionValidator):
         if not user_id:
             return False
 
-        return self.is_event_owner(event, user_id) or self.is_event_guest(
-            event, user_id
-        )
+        return self.is_event_owner(event, user_id) or self.is_event_guest(event, user_id)
 
     def can_modify_event(self, event, user_id):
         """Check if user can modify event (owner + not past date)"""
@@ -122,9 +109,7 @@ class EventPermissionService(IPermissionValidator):
             from django.utils import timezone
 
             if event.date < timezone.now().date():
-                logger.warning(
-                    f"Event {event.id} modification attempted after event date"
-                )
+                logger.warning(f'Event {event.id} modification attempted after event date')
                 return False
 
             return True
@@ -145,8 +130,8 @@ class EventPermissionService(IPermissionValidator):
         try:
             self.validate_guest_or_owner_access(event, user_id)
 
-            if hasattr(event, "event_uuid") and str(event.event_uuid) not in s3_key:
-                logger.warning(f"S3 key {s3_key} does not belong to event {event.id}")
+            if hasattr(event, 'event_uuid') and str(event.event_uuid) not in s3_key:
+                logger.warning(f'S3 key {s3_key} does not belong to event {event.id}')
                 return False
 
             return True
@@ -161,34 +146,30 @@ class EventPermissionService(IPermissionValidator):
     def get_user_event_permissions(self, event, user_id):
         """Get complete permission matrix for user and event"""
         permissions = {
-            "is_owner": False,
-            "is_guest": False,
-            "can_access": False,
-            "can_modify": False,
-            "can_delete": False,
-            "can_upload_files": False,
-            "can_download_files": False,
-            "can_delete_files": False,
+            'is_owner': False,
+            'is_guest': False,
+            'can_access': False,
+            'can_modify': False,
+            'can_delete': False,
+            'can_upload_files': False,
+            'can_download_files': False,
+            'can_delete_files': False,
         }
 
         try:
-            permissions["is_owner"] = self.is_event_owner(event, user_id)
-            permissions["is_guest"] = self.is_event_guest(event, user_id)
-            permissions["can_access"] = (
-                permissions["is_owner"] or permissions["is_guest"] or event.is_public
-            )
+            permissions['is_owner'] = self.is_event_owner(event, user_id)
+            permissions['is_guest'] = self.is_event_guest(event, user_id)
+            permissions['can_access'] = permissions['is_owner'] or permissions['is_guest'] or event.is_public
 
-            if permissions["can_access"]:
-                permissions["can_modify"] = permissions["is_owner"]
-                permissions["can_delete"] = permissions["is_owner"]
-                permissions["can_upload_files"] = True
-                permissions["can_download_files"] = True
-                permissions["can_delete_files"] = permissions["is_owner"]
+            if permissions['can_access']:
+                permissions['can_modify'] = permissions['is_owner']
+                permissions['can_delete'] = permissions['is_owner']
+                permissions['can_upload_files'] = True
+                permissions['can_download_files'] = True
+                permissions['can_delete_files'] = permissions['is_owner']
 
         except Exception as e:
-            logger.error(
-                f"Error getting permissions for user {user_id}, event {event.id}: {e}"
-            )
+            logger.exception(f'Error getting permissions for user {user_id}, event {event.id}: {e}')
 
         return permissions
 
@@ -198,9 +179,7 @@ class EventPermissionService(IPermissionValidator):
 
     def can_user_access_event(self, event, user_id: int) -> bool:
         """Check if user can access event"""
-        return self.is_event_owner(
-            event, user_id
-        ) or self.participant_dal.is_user_participant_by_id(event, user_id)
+        return self.is_event_owner(event, user_id) or self.participant_dal.is_user_participant_by_id(event, user_id)
 
     def can_user_modify_event(self, event, user_id: int) -> bool:
         """Check if user can modify event"""
@@ -208,9 +187,7 @@ class EventPermissionService(IPermissionValidator):
             return True
 
         # Check if user is moderator
-        participation = self.participant_dal.get_user_participation_by_id(
-            event, user_id
-        )
+        participation = self.participant_dal.get_user_participation_by_id(event, user_id)
         return participation and participation.role == EventParticipant.Role.MODERATOR
 
     def get_user_participation_in_event(self, event, user) -> Any | None:

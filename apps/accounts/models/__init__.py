@@ -1,3 +1,3 @@
-from .custom_user import CustomUser
+from apps.accounts.models.custom_user import CustomUser
 
-__all__ = ["CustomUser"]
+__all__ = ['CustomUser']

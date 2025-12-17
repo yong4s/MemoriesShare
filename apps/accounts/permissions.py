@@ -14,7 +14,7 @@ class IsUserOwner(BasePermission):
             return obj.id == request.user.id
 
         # If obj has user attribute (profile, session, etc.)
-        user = getattr(obj, "user", None)
+        user = getattr(obj, 'user', None)
         if user:
             return user.id == request.user.id
 
@@ -25,22 +25,14 @@ class IsRegisteredUser(BasePermission):
     """Permission to check if user is registered (not guest)"""
 
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated
-            and hasattr(request.user, "is_registered")
-            and request.user.is_registered
-        )
+        return request.user.is_authenticated and hasattr(request.user, 'is_registered') and request.user.is_registered
 
 
 class IsGuestUser(BasePermission):
     """Permission to check if user is guest"""
 
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated
-            and hasattr(request.user, "is_guest")
-            and request.user.is_guest
-        )
+        return request.user.is_authenticated and hasattr(request.user, 'is_guest') and request.user.is_guest
 
 
 class CanAccessUserData(BasePermission):
@@ -59,7 +51,7 @@ class CanAccessUserData(BasePermission):
             return obj.id == request.user.id
 
         # If obj has user attribute
-        user = getattr(obj, "user", None)
+        user = getattr(obj, 'user', None)
         if user:
             return user.id == request.user.id
 
@@ -92,7 +84,7 @@ class AccountPermissionMixin:
 
     def get_object(self):
         """Get user object based on URL parameter or current user"""
-        user_id = self.kwargs.get("user_id")
+        user_id = self.kwargs.get('user_id')
 
         if user_id:
             try:

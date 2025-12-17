@@ -34,9 +34,7 @@ class UserDAL:
         except CustomUser.DoesNotExist:
             return None
 
-    def get_by_email(
-        self, email: str, registered_only: bool = True
-    ) -> CustomUser | None:
+    def get_by_email(self, email: str, registered_only: bool = True) -> CustomUser | None:
         """Get user by email with case-insensitive lookup"""
         if not email:
             return None
@@ -56,9 +54,7 @@ class UserDAL:
             return None
 
         try:
-            return CustomUser.objects.select_related().get(
-                invite_token_used=invite_token, is_registered=False
-            )
+            return CustomUser.objects.select_related().get(invite_token_used=invite_token, is_registered=False)
         except CustomUser.DoesNotExist:
             return None
 
@@ -66,8 +62,8 @@ class UserDAL:
         self,
         email: str,
         password: str,
-        first_name: str = "",
-        last_name: str = "",
+        first_name: str = '',
+        last_name: str = '',
         **extra_fields,
     ) -> CustomUser:
         """Create registered user through manager"""
@@ -80,15 +76,13 @@ class UserDAL:
                 last_name=last_name,
                 **extra_fields,
             )
-            logger.info(f"Created registered user: {email} (ID: {user.id})")
+            logger.info(f'Created registered user: {email} (ID: {user.id})')
             return user
         except IntegrityError as e:
-            logger.error(f"Integrity error creating user: {e}")
+            logger.exception(f'Integrity error creating user: {e}')
             raise
 
-    def create_guest_user(
-        self, guest_name: str, invite_token: str = None, **extra_fields
-    ) -> CustomUser:
+    def create_guest_user(self, guest_name: str, invite_token: str | None = None, **extra_fields) -> CustomUser:
         """Create guest user"""
         try:
             user = CustomUser.objects.create(
@@ -101,10 +95,10 @@ class UserDAL:
             user.set_unusable_password()
             user.save()
 
-            logger.info(f"Created guest user: {guest_name} (ID: {user.id})")
+            logger.info(f'Created guest user: {guest_name} (ID: {user.id})')
             return user
         except Exception as e:
-            logger.error(f"Error creating guest user: {e}")
+            logger.exception(f'Error creating guest user: {e}')
             raise
 
     def update_user(self, user: CustomUser, **update_fields) -> CustomUser:
@@ -114,29 +108,27 @@ class UserDAL:
                 setattr(user, field, value)
 
             user.save(update_fields=list(update_fields.keys()))
-            logger.info(f"Updated user {user.id} fields: {list(update_fields.keys())}")
+            logger.info(f'Updated user {user.id} fields: {list(update_fields.keys())}')
             return user
         except Exception as e:
-            logger.error(f"Error updating user {user.id}: {e}")
+            logger.exception(f'Error updating user {user.id}: {e}')
             raise
 
-    def get_registered_users(self, limit: int = None) -> QuerySet[CustomUser]:
+    def get_registered_users(self, limit: int | None = None) -> QuerySet[CustomUser]:
         """Get registered users queryset"""
         queryset = CustomUser.objects.filter(is_registered=True).select_related()
         if limit:
             queryset = queryset[:limit]
         return queryset
 
-    def get_guest_users(self, limit: int = None) -> QuerySet[CustomUser]:
+    def get_guest_users(self, limit: int | None = None) -> QuerySet[CustomUser]:
         """Get guest users queryset"""
         queryset = CustomUser.objects.filter(is_registered=False).select_related()
         if limit:
             queryset = queryset[:limit]
         return queryset
 
-    def search_users(
-        self, query: str, registered_only: bool = True
-    ) -> QuerySet[CustomUser]:
+    def search_users(self, query: str, registered_only: bool = True) -> QuerySet[CustomUser]:
         """Search users by name or email"""
         if not query:
             return CustomUser.objects.none()
@@ -173,10 +165,10 @@ class UserDAL:
             count = inactive_guests.count()
             inactive_guests.delete()
 
-            logger.info(f"Cleaned up {count} inactive guest users")
+            logger.info(f'Cleaned up {count} inactive guest users')
             return count
         except Exception as e:
-            logger.error(f"Error cleaning up inactive guests: {e}")
+            logger.exception(f'Error cleaning up inactive guests: {e}')
             return 0
 
     def get_user_count(self) -> int:
@@ -202,6 +194,6 @@ class UserDAL:
     def get_users_with_statistics(self) -> QuerySet[CustomUser]:
         """Get users with event participation statistics"""
         return CustomUser.objects.select_related().annotate(
-            events_owned=Count("created_events", distinct=True),
-            events_participated=Count("joined_events", distinct=True),
+            events_owned=Count('created_events', distinct=True),
+            events_participated=Count('joined_events', distinct=True),
         )

@@ -31,7 +31,4 @@ class HasJWTAuth(BasePermission):
 
         # Check for API key authentication
         api_key_permission = HasAPIKey()
-        if api_key_permission.has_permission(request, view):
-            return True
-
-        return False
+        return bool(api_key_permission.has_permission(request, view))

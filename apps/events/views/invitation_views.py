@@ -11,13 +11,12 @@ from apps.events.serializers import BulkGuestInviteSerializer
 from apps.events.serializers import EventParticipantDetailSerializer
 from apps.events.serializers import EventParticipantListSerializer
 from apps.events.serializers import GuestInviteSerializer
-
-from .event_views import BaseEventAPIView
+from apps.events.views.event_views import BaseEventAPIView
 
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=["Event Invitations"])
+@extend_schema(tags=['Event Invitations'])
 class EventGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
     """Invite guest to event"""
 
@@ -30,19 +29,19 @@ class EventGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
 
         guest_user, participation = self.get_event_service().invite_guest_to_event(
             event_uuid=event_uuid,
-            guest_name=serializer.validated_data["guest_name"],
-            guest_email=serializer.validated_data.get("guest_email", ""),
+            guest_name=serializer.validated_data['guest_name'],
+            guest_email=serializer.validated_data.get('guest_email', ''),
             requesting_user_id=request.user.id,
             user_service=self.get_user_service(),
         )
 
         response_serializer = EventParticipantDetailSerializer(participation)
 
-        logger.info(f"Invited guest {guest_user.guest_name} to event {event_uuid}")
+        logger.info(f'Invited guest {guest_user.guest_name} to event {event_uuid}')
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
-@extend_schema(tags=["Event Invitations"])
+@extend_schema(tags=['Event Invitations'])
 class EventBulkGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
     """Invite multiple guests to event"""
 
@@ -56,59 +55,49 @@ class EventBulkGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
         invited_participants = []
         failed_invitations = []
 
-        for guest_data in serializer.validated_data["guests"]:
+        for guest_data in serializer.validated_data['guests']:
             try:
                 (
-                    guest_user,
+                    _guest_user,
                     participation,
                 ) = self.get_event_service().invite_guest_to_event(
                     event_uuid=event_uuid,
-                    guest_name=guest_data["guest_name"],
-                    guest_email=guest_data.get("guest_email", ""),
+                    guest_name=guest_data['guest_name'],
+                    guest_email=guest_data.get('guest_email', ''),
                     requesting_user_id=request.user.id,
                     user_service=self.get_user_service(),
                 )
 
                 invited_participants.append(participation)
-                logger.debug(
-                    f'Successfully invited guest {guest_data["guest_name"]} to event {event_uuid}'
-                )
+                logger.debug(f'Successfully invited guest {guest_data['guest_name']} to event {event_uuid}')
 
             except Exception as e:
-                failed_invitations.append(
-                    {
-                        "guest_name": guest_data["guest_name"],
-                        "error_type": getattr(e, "error_code", type(e).__name__),
-                        "error": str(e),
-                    }
-                )
-                logger.warning(
-                    f'Guest invitation failed for {guest_data["guest_name"]}: {e}'
-                )
+                failed_invitations.append({
+                    'guest_name': guest_data['guest_name'],
+                    'error_type': getattr(e, 'error_code', type(e).__name__),
+                    'error': str(e),
+                })
+                logger.warning(f'Guest invitation failed for {guest_data['guest_name']}: {e}')
 
-        success_serializer = EventParticipantListSerializer(
-            invited_participants, many=True
-        )
+        success_serializer = EventParticipantListSerializer(invited_participants, many=True)
 
         response_data = {
-            "invited_participants": success_serializer.data,
-            "successful_count": len(invited_participants),
-            "failed_count": len(failed_invitations),
-            "failed_invitations": failed_invitations,
+            'invited_participants': success_serializer.data,
+            'successful_count': len(invited_participants),
+            'failed_count': len(failed_invitations),
+            'failed_invitations': failed_invitations,
         }
 
         if len(invited_participants) > 0 and len(failed_invitations) == 0:
             status_code = status.HTTP_201_CREATED
-            logger.info(
-                f"Bulk invited all {len(invited_participants)} guests to event {event_uuid}"
-            )
+            logger.info(f'Bulk invited all {len(invited_participants)} guests to event {event_uuid}')
         elif len(invited_participants) > 0:
             status_code = status.HTTP_207_MULTI_STATUS
             logger.info(
-                f"Bulk invited {len(invited_participants)}/{len(invited_participants)+len(failed_invitations)} guests to event {event_uuid}"
+                f'Bulk invited {len(invited_participants)}/{len(invited_participants) + len(failed_invitations)} guests to event {event_uuid}'
             )
         else:
             status_code = status.HTTP_400_BAD_REQUEST
-            logger.warning(f"Failed to invite any guests to event {event_uuid}")
+            logger.warning(f'Failed to invite any guests to event {event_uuid}')
 
         return Response(response_data, status=status_code)

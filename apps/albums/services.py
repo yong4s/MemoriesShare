@@ -1,19 +1,12 @@
 """
 Albums Services Package
 
-Для зворотної сумісності всі сервіси доступні через цей файл.
-Нова архітектура розділяє сервіси на окремі модулі:
+For backward compatibility all services are available through this file.
 - AlbumService: apps.albums.services.album_service
-
-Цей файл тепер слугує тільки для зворотної сумісності.
-Всі класи перенесено в окремі модулі в папці services/
-Для нового коду використовуйте прямі імпорти з відповідних модулів.
 """
 
-# Імпорти для зворотної сумісності
-from .services.album_service import AlbumService
+from apps.albums.services.album_service import AlbumService
 
-# Експортуємо для зручності
 __all__ = [
-    "AlbumService",
+    'AlbumService',
 ]
