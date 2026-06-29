@@ -8,15 +8,10 @@ Following Clean Architecture principles:
 - Inherits from core business exception hierarchy
 """
 
-from apps.shared.exceptions import AppError
 from apps.shared.exceptions import BusinessRuleViolation
 from apps.shared.exceptions import PermissionError
 from apps.shared.exceptions import ResourceNotFoundError
 from apps.shared.exceptions import ValidationError
-
-# =============================================================================
-# Event Domain Exceptions
-# =============================================================================
 
 
 class EventNotFoundError(ResourceNotFoundError):
@@ -57,11 +52,6 @@ class EventBusinessRuleError(BusinessRuleViolation):
         super().__init__(message, error_code=f'event_{rule_name.lower()}_violation', **kwargs)
 
 
-# =============================================================================
-# Participant Domain Exceptions
-# =============================================================================
-
-
 class ParticipantNotFoundError(ResourceNotFoundError):
     """Raised when requested participant does not exist."""
 
@@ -78,11 +68,6 @@ class ParticipantError(BusinessRuleViolation):
     def __init__(self, operation: str, reason: str, **kwargs):
         message = f'Participant {operation} failed: {reason}'
         super().__init__(message, error_code=f'participant_{operation}_failed', **kwargs)
-
-
-# =============================================================================
-# Specific Event Business Rules (convenience classes)
-# =============================================================================
 
 
 class EventCreationError(EventBusinessRuleError):
@@ -123,3 +108,28 @@ class DuplicateParticipantError(ParticipantError):
             f"User '{user_identifier}' is already a participant" if user_identifier else 'User is already a participant'
         )
         super().__init__('addition', reason, **kwargs)
+
+
+class InviteExpiredError(BusinessRuleViolation):
+    """Raised when invite link has expired."""
+
+    def __init__(self, **kwargs):
+        super().__init__('Invite link has expired', error_code='invite_expired', **kwargs)
+
+
+class InviteLimitReachedError(BusinessRuleViolation):
+    """Raised when invite link reached max usage limit."""
+
+    def __init__(self, **kwargs):
+        super().__init__('Invite usage limit reached', error_code='invite_limit_reached', **kwargs)
+
+
+class InviteEmailConflictError(BusinessRuleViolation):
+    """Raised when guest with the same email already joined the event."""
+
+    def __init__(self, email: str, **kwargs):
+        super().__init__(
+            f"Guest with email '{email}' already joined this event",
+            error_code='invite_conflict_email',
+            **kwargs,
+        )

@@ -64,9 +64,9 @@ class EventAdmin(admin.ModelAdmin):
         'description',
         'location',
         'address',
-        'participants__user__email',
-        'participants__guest_name',
-        'participants__guest_email',
+        'participants_through__user__email',
+        'participants_through__guest_name',
+        'participants_through__guest_email',
     ]
 
     readonly_fields = [
@@ -119,17 +119,25 @@ class EventAdmin(admin.ModelAdmin):
         return (
             super()
             .get_queryset(request)
-            .select_related('user')
-            .prefetch_related('participants__user')
+            .prefetch_related('participants_through__user')
             .annotate(
-                participant_count=models.Count('participants'),
+                participant_count=models.Count('participants_through'),
             )
         )
 
     def save_model(self, request, obj, form, change):
-        if not change and not hasattr(obj, 'user'):
-            obj.user = request.user
+        is_new = not change
         super().save_model(request, obj, form, change)
+        if is_new:
+            EventParticipant.objects.get_or_create(
+                event=obj,
+                user=request.user,
+                defaults={
+                    'role': EventParticipant.Role.OWNER,
+                    'rsvp_status': EventParticipant.RsvpStatus.ACCEPTED,
+                    'join_method': 'direct',
+                },
+            )
 
     def date_display(self, obj):
         now = timezone.now().date()
@@ -155,6 +163,8 @@ class EventAdmin(admin.ModelAdmin):
     def time_display(self, obj):
         if obj.all_day:
             return format_html('<span style="color: blue;">🕛 All Day</span>')
+        if not obj.time:
+            return format_html('<span style="color: gray;">🕐 No Time</span>')
         return format_html('<span style="color: black;">🕐 {}</span>', obj.time.strftime('%H:%M'))
 
     time_display.short_description = 'Time'
@@ -174,9 +184,9 @@ class EventAdmin(admin.ModelAdmin):
             if total == 0:
                 return format_html('<span style="color: gray;">👥 No Participants</span>')
 
-            owners = obj.participants.filter(role='OWNER').count()
-            moderators = obj.participants.filter(role='MODERATOR').count()
-            guests = obj.participants.filter(role='GUEST').count()
+            owners = obj.participants_through.filter(role=EventParticipant.Role.OWNER).count()
+            moderators = obj.participants_through.filter(role=EventParticipant.Role.MODERATOR).count()
+            guests = obj.participants_through.filter(role=EventParticipant.Role.GUEST).count()
 
             stats = []
             if owners > 0:
@@ -200,13 +210,13 @@ class EventAdmin(admin.ModelAdmin):
 
     def rsvp_breakdown_display(self, obj):
         try:
-            participants = obj.participants.all()
+            participants = obj.participants_through.all()
             if not participants:
                 return format_html('<span style="color: gray;">No Participants</span>')
 
-            accepted = sum(1 for p in participants if p.rsvp_status == 'ACCEPTED')
-            declined = sum(1 for p in participants if p.rsvp_status == 'DECLINED')
-            pending = sum(1 for p in participants if p.rsvp_status == 'PENDING')
+            accepted = sum(1 for p in participants if p.rsvp_status == EventParticipant.RsvpStatus.ACCEPTED)
+            declined = sum(1 for p in participants if p.rsvp_status == EventParticipant.RsvpStatus.DECLINED)
+            pending = sum(1 for p in participants if p.rsvp_status == EventParticipant.RsvpStatus.PENDING)
 
             breakdown = []
             if accepted > 0:
@@ -224,7 +234,7 @@ class EventAdmin(admin.ModelAdmin):
 
     def guest_info_summary(self, obj):
         try:
-            guests = obj.participants.filter(role='GUEST')
+            guests = obj.participants_through.filter(role=EventParticipant.Role.GUEST)
             if not guests:
                 return format_html('<span style="color: gray;">No Guests</span>')
 
@@ -245,10 +255,10 @@ class EventAdmin(admin.ModelAdmin):
 
     def owner_display(self, obj):
         try:
-            owner_participation = obj.participants.filter(role='OWNER').first()
+            owner_participation = obj.participants_through.filter(role=EventParticipant.Role.OWNER).first()
             if owner_participation and owner_participation.user:
                 user = owner_participation.user
-                icon = '🔐' if user.is_registered else ('📧' if owner.user.email else '👤')
+                icon = '🔐' if user.is_registered else ('📧' if user.email else '👤')
                 return format_html(
                     '<a href="/admin/auth/user/{}/change/">{} {}</a>',
                     user.id,
@@ -264,7 +274,7 @@ class EventAdmin(admin.ModelAdmin):
     def export_participant_list(self, request, queryset):
         count = 0
         for event in queryset:
-            count += event.participants.count()
+            count += event.participants_through.count()
 
         self.message_user(request, f'Ready to export {count} participants from {queryset.count()} events.')
 
@@ -392,13 +402,21 @@ class EventParticipantAdmin(admin.ModelAdmin):
     role_display.short_description = 'Role'
 
     def rsvp_status_display(self, obj):
-        colors = {'ACCEPTED': 'green', 'DECLINED': 'red', 'PENDING': 'orange'}
-        icons = {'ACCEPTED': '✅', 'DECLINED': '❌', 'PENDING': '⏳'}
+        colors = {
+            EventParticipant.RsvpStatus.ACCEPTED: 'green',
+            EventParticipant.RsvpStatus.DECLINED: 'red',
+            EventParticipant.RsvpStatus.PENDING: 'orange',
+        }
+        icons = {
+            EventParticipant.RsvpStatus.ACCEPTED: '✅',
+            EventParticipant.RsvpStatus.DECLINED: '❌',
+            EventParticipant.RsvpStatus.PENDING: '⏳',
+        }
 
         color = colors.get(obj.rsvp_status, 'black')
         icon = icons.get(obj.rsvp_status, '❓')
 
-        return format_html('<span style="color: {};">{} {}</span>', color, icon, obj.rsvp_status)
+        return format_html('<span style="color: {};">{} {}</span>', color, icon, obj.get_rsvp_status_display())
 
     rsvp_status_display.short_description = 'RSVP Status'
 
@@ -424,31 +442,31 @@ class EventParticipantAdmin(admin.ModelAdmin):
     responded_status.short_description = 'Response'
 
     def mark_as_accepted(self, request, queryset):
-        count = queryset.update(rsvp_status='ACCEPTED')
+        count = queryset.update(rsvp_status=EventParticipant.RsvpStatus.ACCEPTED)
         self.message_user(request, f'{count} participants marked as accepted.')
 
     mark_as_accepted.short_description = 'Mark as Accepted'
 
     def mark_as_declined(self, request, queryset):
-        count = queryset.update(rsvp_status='DECLINED')
+        count = queryset.update(rsvp_status=EventParticipant.RsvpStatus.DECLINED)
         self.message_user(request, f'{count} participants marked as declined.')
 
     mark_as_declined.short_description = 'Mark as Declined'
 
     def mark_as_pending(self, request, queryset):
-        count = queryset.update(rsvp_status='PENDING')
+        count = queryset.update(rsvp_status=EventParticipant.RsvpStatus.PENDING)
         self.message_user(request, f'{count} participants marked as pending.')
 
     mark_as_pending.short_description = 'Mark as Pending'
 
     def promote_to_moderator(self, request, queryset):
-        count = queryset.exclude(role='OWNER').update(role='MODERATOR')
+        count = queryset.exclude(role=EventParticipant.Role.OWNER).update(role=EventParticipant.Role.MODERATOR)
         self.message_user(request, f'{count} participants promoted to moderator.')
 
     promote_to_moderator.short_description = 'Promote to Moderator'
 
     def demote_to_guest(self, request, queryset):
-        count = queryset.exclude(role='OWNER').update(role='GUEST')
+        count = queryset.exclude(role=EventParticipant.Role.OWNER).update(role=EventParticipant.Role.GUEST)
         self.message_user(request, f'{count} participants demoted to guest.')
 
     demote_to_guest.short_description = 'Demote to Guest'

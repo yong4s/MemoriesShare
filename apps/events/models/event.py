@@ -6,27 +6,60 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.events.models.event_participant import EventParticipant
 from apps.shared.base.models import BaseModel
 
 
 class EventQuerySet(models.QuerySet):
-    """Optimized QuerySet for events with annotations and filtering"""
+    """Optimized QuerySet for events with annotations and filtering.
+
+    User-scope filters use ``Exists`` subqueries instead of ``filter(participants=...).distinct()``
+    to avoid the M2M join × per-event participants Cartesian intermediate that
+    Postgres has to collapse with DISTINCT — quadratic blow-up under ``with_statistics()``
+    that joins ``participants_through`` 4 more times.
+    """
 
     def for_user(self, user_id):
         """Events where user is a participant"""
-        return self.filter(participants=user_id).distinct()
+        return self.filter(
+            models.Exists(
+                EventParticipant.objects.filter(event=models.OuterRef('pk'), user_id=user_id),
+            ),
+        )
 
     def for_owner(self, user_id):
-        """Events owned by specific user"""
-        return self.filter(user_id=user_id)
+        """Events owned by specific user (via participants_through with OWNER role)"""
+        return self.filter(
+            models.Exists(
+                EventParticipant.objects.filter(
+                    event=models.OuterRef('pk'),
+                    user_id=user_id,
+                    role=EventParticipant.Role.OWNER,
+                ),
+            ),
+        )
 
     def accessible_to_user(self, user_id):
-        """All events accessible to user (owned, participating, or public)"""
-        return self.filter(
-            models.Q(user_id=user_id)  # Own events
-            | models.Q(participants=user_id)  # Participant in other events
-            | models.Q(is_public=True)  # Public events
-        ).distinct()
+        """Events where user is a participant (includes OWNER role via participants_through)"""
+        return self.for_user(user_id)
+
+    def participating_only(self, user_id):
+        """Events where user is participant but NOT owner"""
+        is_participant = models.Exists(
+            EventParticipant.objects.filter(event=models.OuterRef('pk'), user_id=user_id),
+        )
+        is_owner = models.Exists(
+            EventParticipant.objects.filter(
+                event=models.OuterRef('pk'),
+                user_id=user_id,
+                role=EventParticipant.Role.OWNER,
+            ),
+        )
+        return self.filter(is_participant).exclude(is_owner)
+
+    def public_events(self):
+        """Public events visible to all users"""
+        return self.filter(is_public=True)
 
     def search(self, search_term):
         """Apply search filter to events"""
@@ -36,9 +69,6 @@ class EventQuerySet(models.QuerySet):
 
     def with_statistics(self):
         """Add participant statistics via annotations"""
-        from django.apps import apps
-
-        EventParticipant = apps.get_model('events', 'EventParticipant')
         return self.annotate(
             total_participants=models.Count('participants_through'),
             attending_count=models.Count(
@@ -77,7 +107,7 @@ class EventQuerySet(models.QuerySet):
 
     def optimized(self):
         """Apply standard optimizations for event queries"""
-        return self.select_related('user').prefetch_related('participants_through__user')
+        return self.prefetch_related('participants_through__user')
 
     def upcoming(self):
         """Future events"""
@@ -103,6 +133,12 @@ class EventManager(models.Manager):
     def accessible_to_user(self, user_id):
         return self.get_queryset().accessible_to_user(user_id)
 
+    def participating_only(self, user_id):
+        return self.get_queryset().participating_only(user_id)
+
+    def public_events(self):
+        return self.get_queryset().public_events()
+
     def search(self, search_term):
         return self.get_queryset().search(search_term)
 
@@ -125,16 +161,9 @@ class EventManager(models.Manager):
 class Event(BaseModel):
     """
     Clean "dumb" Event model - only defines data structure.
+    Ownership lives in EventParticipant (role=OWNER) via participants_through.
     Business logic moved to EventService, queries optimized in EventQuerySet.
     """
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='owned_events',
-        verbose_name=_('Event Owner'),
-        db_index=True,
-    )
 
     event_uuid = models.UUIDField(_('Event UUID'), unique=True, editable=False, db_index=True)
 
@@ -178,8 +207,6 @@ class Event(BaseModel):
         indexes = [
             models.Index(fields=['date', 'is_public']),
             models.Index(fields=['event_uuid']),
-            models.Index(fields=['user', 'date']),
-            models.Index(fields=['user', 'is_public']),
         ]
 
     def __str__(self):
@@ -197,15 +224,12 @@ class Event(BaseModel):
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
-        """Clean data and auto-generate UUID and S3 prefix"""
+        """Clean data and auto-generate UUID. S3 prefix is set by EventService on creation."""
         if not self.event_uuid:
             self.event_uuid = uuid.uuid4()
 
         if not self.s3_prefix and self.event_uuid:
-            if self.user_id and hasattr(self.user, 'user_uuid'):
-                self.s3_prefix = f'users/{self.user.user_uuid}/events/{self.event_uuid}'
-            else:
-                self.s3_prefix = f'events/{self.event_uuid}'
+            self.s3_prefix = f'events/{self.event_uuid}'
 
         if self.event_name:
             self.event_name = self.event_name.strip()
@@ -216,5 +240,4 @@ class Event(BaseModel):
         if self.address:
             self.address = self.address.strip()
 
-        self.clean()
         super().save(*args, **kwargs)

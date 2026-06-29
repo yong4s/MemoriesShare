@@ -1,30 +1,38 @@
+from functools import cached_property
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
-from apps.events.permissions import CanAccessEvent
-from apps.events.permissions import EventPermissionMixin
+from apps.events.dal.event_dal import EventDAL
 from apps.events.serializers import EventListSerializer
-from apps.events.views.event_views import BaseEventAPIView
+from apps.events.views.base import BaseEventAPIView
+from apps.shared.container import get_container
 
 
 @extend_schema(tags=['Event Analytics'])
-class EventAnalyticsAPIView(BaseEventAPIView, EventPermissionMixin):
+class EventAnalyticsAPIView(BaseEventAPIView):
     """Event analytics and statistics"""
 
-    permission_classes = [IsAuthenticated, CanAccessEvent]
+    permission_classes = [IsAuthenticated]
+
+    @cached_property
+    def event_service(self):
+        return get_container().event_service()
+
+    @cached_property
+    def analytics_service(self):
+        return get_container().analytics_service()
 
     def get(self, request, event_uuid):
         """Get event analytics and statistics"""
-        event = self.get_event_service().get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
+        event = self.event_service.get_event_detail(event_uuid=event_uuid, user_id=request.user.id)
 
-        analytics_dal = EventAnalyticsDAL()
+        statistics = self.analytics_service.get_event_statistics(event)
 
-        statistics = analytics_dal.get_event_statistics(event)
-
-        participants = self.get_event_service().get_event_participants(
+        participants = self.event_service.get_event_participants(
             event_uuid=event_uuid, requesting_user_id=request.user.id
         )
 
@@ -56,15 +64,21 @@ class UserEventAnalyticsAPIView(BaseEventAPIView):
 
     permission_classes = [IsAuthenticated]
 
+    @cached_property
+    def analytics_dal(self):
+        return EventAnalyticsDAL()
+
+    @cached_property
+    def event_dal(self):
+        return EventDAL()
+
     def get(self, request):
         """Get user's event participation analytics"""
-        analytics_dal = EventAnalyticsDAL()
+        user_stats = self.analytics_dal.get_user_participation_statistics(request.user.id)
 
-        user_stats = analytics_dal.get_user_participation_statistics(request.user.id)
+        recent_events = self.event_dal.get_recent_events(request.user.id, limit=5)
 
-        recent_events = analytics_dal.get_recent_events(request.user.id, limit=5)
-
-        upcoming_events = analytics_dal.get_upcoming_events(request.user.id, limit=5)
+        upcoming_events = self.event_dal.get_upcoming_events(request.user.id, limit=5)
 
         recent_serializer = EventListSerializer(recent_events, many=True)
         upcoming_serializer = EventListSerializer(upcoming_events, many=True)

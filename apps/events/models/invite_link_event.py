@@ -54,7 +54,7 @@ class InviteEventLink(BaseModel):
         super().clean()
         errors = {}
 
-        if self.expires_at and self.expires_at <= timezone.now():
+        if self._state.adding and self.expires_at and self.expires_at <= timezone.now():
             errors['expires_at'] = _('Expiry date must be in the future')
 
         if self.max_uses < 1:
