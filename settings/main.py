@@ -16,7 +16,6 @@ INSTALLED_APPS += [
     'apps.events',
     'apps.albums',
     'apps.mediafiles',
-    'apps.reactions',
     # Celery and async tasks
     'django_celery_beat',
     # Django AllAuth
@@ -41,9 +40,6 @@ REST_FRAMEWORK = {
 }
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
-
-# Google Drive Encryption
-GOOGLE_DRIVE_ENCRYPTION_KEY = '8H0rAUyLEhTI2uRJxYaqSHjVK9OtxTI_xQ8DqdmpGEE='
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -77,18 +73,23 @@ if ENVIRONMENT == TESTING_ENVIRONMENT:
 
 # CORS
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:8080',
-    'http://127.0.0.1:8080',
-    env('FRONTEND_URL', default='http://localhost:3000'),
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=[
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
+        env('FRONTEND_URL', default='http://localhost:3000'),
+    ],
+)
 
-# Allow all origins in development (can be restrictive in production)
+CORS_ALLOWED_ORIGIN_REGEXES = []
 if DEBUG:
-    CORS_ORIGIN_ALLOW_ALL = True
-    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOWED_ORIGIN_REGEXES += [
+        r'^https://.*\.ngrok-free\.app$',
+        r'^https://.*\.ngrok\.io$',
+    ]
 
 # CORS Headers for JWT authentication
 CORS_ALLOW_HEADERS = [
@@ -104,18 +105,43 @@ CORS_ALLOW_HEADERS = [
     'x-api-key',  # For backward compatibility with API keys
 ]
 
-# CSRF exemption for API endpoints
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    env('FRONTEND_URL', default='http://localhost:3000'),
-]
+# CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = env.list(
+    'CSRF_TRUSTED_ORIGINS',
+    default=[
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        env('FRONTEND_URL', default='http://localhost:3000'),
+    ],
+)
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += ['https://*.ngrok-free.app', 'https://*.ngrok.io']
 
-# Exempt API endpoints from CSRF protection
-CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = False
+
+# Production security headers (active when DEBUG=False).
+# See `python manage.py check --deploy` for the full checklist.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000)  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    X_FRAME_OPTIONS = 'DENY'
+else:
+    CSRF_COOKIE_SECURE = False
+
+# Frontend static bundle integration
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend',
+]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Swagger
 SPECTACULAR_SETTINGS = {
@@ -192,9 +218,9 @@ FILE_UPLOAD_STORAGE = f"{env('FILE_UPLOAD_STORAGE', default='local')}"
 
 AWS_ACCESS_KEY_ID = env.str('YOUR_ACCESS_KEY_S3')
 AWS_SECRET_ACCESS_KEY = env.str('YOUR_SECRET_KEY_S3')
-AWS_S3_REGION_NAME = 'eu-north-1'
+AWS_S3_REGION_NAME = env.str('AWS_S3_REGION_NAME', default='eu-north-1')
 AWS_STORAGE_BUCKET_NAME = env.str('AWS_STORAGE_BUCKET_NAME_S3')
-S3_BUCKET_NAME = 'media-flow'
+S3_BUCKET_NAME = env.str('AWS_STORAGE_BUCKET_NAME_S3', default='media-flow')
 
 # Django AllAuth Configuration
 SITE_ID = 1
@@ -243,11 +269,6 @@ ENCRYPTION_KEY = env.str('ENCRYPTION_KEY', default='')
 GOOGLE_OAUTH_CLIENT_ID = env.str('GOOGLE_OAUTH_CLIENT_ID', default='')
 GOOGLE_OAUTH_CLIENT_SECRET = env.str('GOOGLE_OAUTH_CLIENT_SECRET', default='')
 
-# Clerk Authentication Configuration (DISABLED for development)
-# CLERK_SECRET_KEY = env.str('CLERK_SECRET_KEY', default='')
-# CLERK_PUBLISHABLE_KEY = env.str('CLERK_PUBLISHABLE_KEY', default='')
-# CLERK_WEBHOOK_SECRET = env.str('CLERK_WEBHOOK_SECRET', default='')
-
 # Simple JWT Authentication Configuration
 from datetime import timedelta
 
@@ -258,7 +279,7 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': env.str('SECRET_KEY', default='ek12k!Kkwk1e2kdkskqkNDNhw278AB@)3nas'),
+    'SIGNING_KEY': env.str('SIMPLE_JWT_SIGNING_KEY', default=SECRET_KEY),
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
     'ISSUER': 'media-flow-api',
@@ -281,9 +302,6 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenRefreshSlidingSerializer',
 }
 
-# Legacy JWT service key (for backward compatibility)
-SIMPLE_JWT_SECRET_KEY = env.str('SIMPLE_JWT_SECRET_KEY', default='dev-jwt-secret-key-change-in-production')
-
 # Email Configuration
 EMAIL_BACKEND = env.str('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = env.str('EMAIL_HOST', default='smtp.gmail.com')
@@ -296,9 +314,27 @@ DEFAULT_FROM_EMAIL = env.str('DEFAULT_FROM_EMAIL', default='MediaFlow <noreply@m
 # Email Templates
 EMAIL_SUBJECT_PREFIX = '[MediaFlow] '
 
+# Passwordless Authentication Settings
+PASSWORDLESS_CODE_TTL_MINUTES = env.int('PASSWORDLESS_CODE_TTL_MINUTES', default=10)
+PASSWORDLESS_MAX_ATTEMPTS = env.int('PASSWORDLESS_MAX_ATTEMPTS', default=5)
+PASSWORDLESS_EMAIL_RATE_LIMIT = env.int('PASSWORDLESS_EMAIL_RATE_LIMIT', default=5)
+PASSWORDLESS_EMAIL_WINDOW_MINUTES = env.int('PASSWORDLESS_EMAIL_WINDOW_MINUTES', default=15)
+PASSWORDLESS_IP_RATE_LIMIT = env.int('PASSWORDLESS_IP_RATE_LIMIT', default=20)
+PASSWORDLESS_IP_WINDOW_MINUTES = env.int('PASSWORDLESS_IP_WINDOW_MINUTES', default=15)
+PASSWORDLESS_VERIFICATION_ATTEMPTS = env.int('PASSWORDLESS_VERIFICATION_ATTEMPTS', default=5)
+PASSWORDLESS_FAILED_LOCKOUT_MINUTES = env.int('PASSWORDLESS_FAILED_LOCKOUT_MINUTES', default=60)
+
+# Number of trusted reverse proxies in front of the app (Render's load balancer = 1).
+# Used to resolve the real client IP from X-Forwarded-For without trusting
+# attacker-supplied values. Set to 0 for a direct/no-proxy deployment.
+TRUSTED_PROXY_COUNT = env.int('TRUSTED_PROXY_COUNT', default=1)
+
+# Site URL for email templates
+SITE_URL = env.str('SITE_URL', default='https://mediaflow.com')
+
 # Celery Configuration
-CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default='redis://localhost:6379/1')
+CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default='redis://redis:6379/1')
 
 # Basic Celery settings
 CELERY_TASK_SERIALIZER = 'json'
@@ -310,8 +346,8 @@ CELERY_ENABLE_UTC = True
 # Redis Cache Configuration (separate from Celery)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': env.str('REDIS_URL', default='redis://localhost:6379/2'),
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': env.str('REDIS_URL', default='redis://redis:6379/2'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         },
@@ -329,3 +365,48 @@ if ENVIRONMENT == TESTING_ENVIRONMENT:
             'LOCATION': 'test-cache',
         }
     }
+
+# Logging — stream to stdout so `docker compose logs` shows everything.
+# Root level INFO; `apps.*` loggers stay at DEBUG in dev for verbose tracing.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # set to DEBUG to see every SQL query
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
