@@ -1,34 +1,46 @@
+"""
+Base Cache Client - Pure Infrastructure Layer
+
+Provides low-level cache operations without domain knowledge.
+Handles Redis/Django cache backend interactions safely.
+"""
+
 import json
 import logging
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Union
+from typing import Any, Dict
 
 from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 
-from apps.shared.cache.cache_keys import CacheKeys
-
 logger = logging.getLogger(__name__)
 
 
-class CacheManager:
+class BaseCacheClient:
+    """
+    Low-level cache client with no domain knowledge.
+    
+    Responsibilities:
+    - Core cache operations (get, set, delete)
+    - Safe pattern-based deletion using SCAN
+    - Error handling and logging
+    - Statistics tracking (hits/misses/errors)
+    
+    Does NOT know about:
+    - Events, Users, or other domain entities
+    - Business-specific cache keys or TTL strategies
+    - Domain-specific invalidation logic
+    """
+    
     def __init__(self):
         self.cache = cache
         self.logger = logger
-        self.keys = CacheKeys
         self._hits = 0
         self._misses = 0
         self._errors = 0
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Get value from cache with statistics tracking."""
         try:
-            if not self.keys.validate_key(key):
-                self.logger.warning(f'Invalid cache key format: {key}')
-                return default
-
             value = self.cache.get(key, default)
 
             if value is not default:
@@ -46,16 +58,13 @@ class CacheManager:
             return default
 
     def set(self, key: str, value: Any, timeout: int | None = None) -> bool:
+        """Set value in cache with optional timeout."""
         try:
-            if not self.keys.validate_key(key):
-                self.logger.warning('Invalid key')
-                return False
-
-            # Normalize common serializable types
+            # Normalize serializable types
             if isinstance(value, dict | list | str | int | float | bool):
                 payload = value
             else:
-                # convert to JSON serializable structure first
+                # Convert to JSON serializable structure
                 payload = json.loads(json.dumps(value, cls=DjangoJSONEncoder, default=str))
 
             success = self.cache.set(key, payload, timeout)
@@ -69,6 +78,7 @@ class CacheManager:
             return False
 
     def delete(self, key: str) -> bool:
+        """Delete single key from cache."""
         try:
             success = self.cache.delete(key)
             self.logger.debug(f'Cache DELETE: {key} (success: {success})')
@@ -80,6 +90,15 @@ class CacheManager:
             return False
 
     def delete_pattern(self, pattern: str) -> int:
+        """
+        Delete keys matching pattern using django_redis native delete_pattern.
+
+        Args:
+            pattern: Redis glob pattern (e.g., "user:123:*")
+
+        Returns:
+            Number of keys deleted
+        """
         try:
             if hasattr(self.cache, 'delete_pattern'):
                 deleted = self.cache.delete_pattern(pattern)
@@ -95,23 +114,18 @@ class CacheManager:
             return 0
 
     def get_many(self, keys: list[str]) -> dict[str, Any]:
+        """Get multiple keys at once."""
         try:
-            # Filter out invalid keys
-            valid_keys = [key for key in keys if self.keys.validate_key(key)]
-            if len(valid_keys) != len(keys):
-                invalid_keys = set(keys) - set(valid_keys)
-                self.logger.warning(f'Invalid cache keys filtered out: {invalid_keys}')
-
-            if not valid_keys:
+            if not keys:
                 return {}
 
-            result = self.cache.get_many(valid_keys)
+            result = self.cache.get_many(keys)
 
             # Update statistics
             self._hits += len(result)
-            self._misses += len(valid_keys) - len(result)
+            self._misses += len(keys) - len(result)
 
-            self.logger.debug(f'Cache GET_MANY: {len(valid_keys)} keys, {len(result)} found')
+            self.logger.debug(f'Cache GET_MANY: {len(keys)} keys, {len(result)} found')
             return result
 
         except Exception as e:
@@ -120,25 +134,20 @@ class CacheManager:
             return {}
 
     def set_many(self, mapping: dict[str, Any], timeout: int | None = None) -> bool:
+        """Set multiple key-value pairs at once."""
         try:
-            # Filter out invalid keys and serialize values
-            valid_mapping = {}
-            for key, value in mapping.items():
-                if not self.keys.validate_key(key):
-                    self.logger.warning(f'Invalid cache key skipped: {key}')
-                    continue
-
-                # Serialize complex objects
-                if hasattr(value, '__dict__') and not isinstance(value, str | int | float | bool | list | dict):
-                    value = json.dumps(value, cls=DjangoJSONEncoder, default=str)
-
-                valid_mapping[key] = value
-
-            if not valid_mapping:
+            if not mapping:
                 return False
 
-            success = self.cache.set_many(valid_mapping, timeout)
-            self.logger.debug(f'Cache SET_MANY: {len(valid_mapping)} keys (timeout: {timeout})')
+            # Serialize complex objects
+            processed_mapping = {}
+            for key, value in mapping.items():
+                if hasattr(value, '__dict__') and not isinstance(value, str | int | float | bool | list | dict):
+                    value = json.dumps(value, cls=DjangoJSONEncoder, default=str)
+                processed_mapping[key] = value
+
+            success = self.cache.set_many(processed_mapping, timeout)
+            self.logger.debug(f'Cache SET_MANY: {len(processed_mapping)} keys (timeout: {timeout})')
             return success
 
         except Exception as e:
@@ -146,68 +155,8 @@ class CacheManager:
             self.logger.exception(f'Cache SET_MANY error: {e}')
             return False
 
-    def invalidate_user_cache(self, user_id: int, cache_types: list[str] | None = None) -> int:
-        try:
-            if cache_types:
-                # Invalidate specific types
-                deleted = 0
-                for cache_type in cache_types:
-                    pattern = f'{self.keys.USER_PREFIX}:{user_id}:{cache_type}:*'
-                    deleted += self.delete_pattern(pattern)
-            else:
-                # Invalidate all user cache
-                pattern = self.keys.user_pattern(user_id)
-                deleted = self.delete_pattern(pattern)
-
-            self.logger.info(f'Invalidated user cache for user {user_id}: {deleted} keys')
-            return deleted
-
-        except Exception as e:
-            self._errors += 1
-            self.logger.exception(f'Error invalidating user cache for user {user_id}: {e}')
-            return 0
-
-    def invalidate_event_cache(self, event_uuid: str, cache_types: list[str] | None = None) -> int:
-        try:
-            if cache_types:
-                # Invalidate specific types
-                deleted = 0
-                for cache_type in cache_types:
-                    pattern = f'{self.keys.EVENT_PREFIX}:{event_uuid}:{cache_type}:*'
-                    deleted += self.delete_pattern(pattern)
-            else:
-                # Invalidate all event cache
-                pattern = self.keys.event_pattern(event_uuid)
-                deleted = self.delete_pattern(pattern)
-
-            self.logger.info(f'Invalidated event cache for event {event_uuid}: {deleted} keys')
-            return deleted
-
-        except Exception as e:
-            self._errors += 1
-            self.logger.exception(f'Error invalidating event cache for event {event_uuid}: {e}')
-            return 0
-
-    def warm_event_cache(self, event_data: dict[str, Any], event_uuid: str) -> bool:
-        try:
-            # Different TTLs for different data types
-            success = True
-            success &= self.set(self.keys.event_detail(event_uuid), event_data, timeout=600)  # 10 min
-            success &= self.set(
-                self.keys.event_statistics(event_uuid),
-                event_data.get('statistics', {}),
-                timeout=300,
-            )  # 5 min
-
-            self.logger.info(f'Warmed cache for event {event_uuid}')
-            return success
-
-        except Exception as e:
-            self._errors += 1
-            self.logger.exception(f'Error warming event cache for {event_uuid}: {e}')
-            return False
-
     def get_stats(self) -> dict[str, int | float]:
+        """Get cache operation statistics."""
         total_operations = self._hits + self._misses
         hit_rate = (self._hits / total_operations * 100) if total_operations > 0 else 0
 
@@ -220,12 +169,14 @@ class CacheManager:
         }
 
     def reset_stats(self) -> None:
+        """Reset statistics counters."""
         self._hits = 0
         self._misses = 0
         self._errors = 0
         self.logger.info('Cache statistics reset')
 
     def health_check(self) -> dict[str, Any]:
+        """Perform cache backend health check."""
         try:
             # Test basic operations
             test_key = 'health:check:test'
@@ -253,3 +204,7 @@ class CacheManager:
                 'test_successful': False,
                 'error': str(e),
             }
+
+
+# Module-level singleton for shared use across application
+base_cache_client = BaseCacheClient()

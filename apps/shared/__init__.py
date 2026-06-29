@@ -1,16 +1,15 @@
 """
-Shared utilities and base classes for the Media Flow application
+Shared utilities and base models for the Media Flow application
 
 This module provides organized access to all shared functionality:
-- Base classes (BaseModel, BaseAPIView)
-- Authentication (JWT, permissions)
+- Base models (BaseModel for timestamps)
+- Authentication (JWT via django-rest-framework-simplejwt, permissions)
 - Storage (S3Service and backends)
 - Exceptions (custom exceptions)
 - Utilities (validators, helpers)
 
-Import specific classes directly from their new locations:
-- from apps.shared.base.base_api_view import BaseAPIView
-- from apps.shared.auth.permissions import HasJWTAuth
+Import specific classes directly from their submodules:
+- from apps.shared.base.models import BaseModel
 - etc.
 """
 

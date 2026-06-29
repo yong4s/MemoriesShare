@@ -12,14 +12,6 @@ from typing import Any
 
 
 class IPermissionValidator(ABC):
-    """
-    Minimal interface for permission validation operations.
-
-    This interface provides only the essential permission validation methods
-    needed by dependent services, allowing them to decouple from the full
-    EventPermissionService implementation.
-    """
-
     @abstractmethod
     def validate_owner_access(self, event: Any, user_id: int) -> bool:
         """
@@ -53,6 +45,25 @@ class IPermissionValidator(ABC):
         """
 
     @abstractmethod
+    def validate_participant_or_owner_access(self, event: Any, user_id: int) -> bool:
+        """
+        Validate that user is an actual participant of the event, ignoring is_public.
+
+        Stricter than validate_guest_or_owner_access — public-event readers cannot
+        enumerate participant data.
+
+        Args:
+            event: Event object to check
+            user_id: ID of user to validate
+
+        Returns:
+            True if validation passes
+
+        Raises:
+            EventPermissionError: If user is not a participant
+        """
+
+    @abstractmethod
     def is_event_owner(self, event: Any, user_id: int) -> bool:
         """
         Check if user is event owner (returns boolean, no exception).
@@ -78,81 +89,15 @@ class IPermissionValidator(ABC):
             True if user has access, False otherwise
         """
 
+    @abstractmethod
+    def is_user_participant(self, event: Any, user_id: int) -> bool:
+        """
+        Check if user is an actual participant of the event (any role).
 
-class SimplePermissionValidator(IPermissionValidator):
-    """
-    Simple implementation of permission validation using direct event owner checks.
+        Args:
+            event: Event object to check
+            user_id: ID of user to check
 
-    This provides a fallback implementation that doesn't require the full
-    EventPermissionService, useful for breaking circular dependencies during
-    refactoring or for simple use cases.
-    """
-
-    def validate_owner_access(self, event: Any, user_id: int) -> bool:
-        """Validate owner access using direct ownership check."""
-        import logging
-
-        from rest_framework.exceptions import PermissionDenied
-
-        logger = logging.getLogger(__name__)
-
-        if not self.is_event_owner(event, user_id):
-            logger.warning(f'User {user_id} attempted to access event {event.id} without ownership')
-            msg = 'You do not have permission to access this event'
-            raise PermissionDenied(msg)
-
-        return True
-
-    def validate_guest_or_owner_access(self, event: Any, user_id: int) -> bool:
-        """Validate guest or owner access using basic checks."""
-        import logging
-
-        from rest_framework.exceptions import PermissionDenied
-
-        logger = logging.getLogger(__name__)
-
-        if not self.has_event_access(event, user_id):
-            logger.warning(f'User {user_id} attempted to access event {event.id} without permission')
-            msg = 'You do not have permission to access this event'
-            raise PermissionDenied(msg)
-
-        return True
-
-    def is_event_owner(self, event: Any, user_id: int) -> bool:
-        """Check event ownership directly."""
-        if not event or not user_id:
-            return False
-
-        # Direct ownership check using legacy user field or participant relationship
-        if hasattr(event, 'user_id') and event.user_id:
-            return event.user_id == user_id
-        if hasattr(event, 'user') and event.user:
-            return event.user.pk == user_id
-
-        return False
-
-    def has_event_access(self, event: Any, user_id: int) -> bool:
-        """Check event access using basic rules."""
-        if not event:
-            return False
-
-        # Public events are accessible to everyone
-        if getattr(event, 'is_public', False):
-            return True
-
-        if not user_id:
-            return False
-
-        # Owner always has access
-        if self.is_event_owner(event, user_id):
-            return True
-
-        # Check if user is a participant (simple implementation)
-        try:
-            # Try to use the EventParticipant relationship
-            from apps.events.models.event_participant import EventParticipant
-
-            return EventParticipant.objects.filter(event=event, user_id=user_id).exists()
-        except Exception:
-            # Fallback: if we can't check participants, deny access
-            return False
+        Returns:
+            True if user is participant, False otherwise
+        """

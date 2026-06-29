@@ -137,6 +137,87 @@ class CacheKeys:
         """
         return f'{cls.EVENT_PREFIX}:{event_uuid}:participant:{participant_id}'
 
+    # ── Media File Keys ────────────────────────────────────────────────────
+
+    @classmethod
+    def media_file_detail(cls, file_uuid: str) -> str:
+        """Cache key for media file detail
+
+        Args:
+            file_uuid: File UUID
+
+        Returns:
+            str: Cache key like 'media:abc-123:detail'
+        """
+        return f'{cls.MEDIA_PREFIX}:{file_uuid}:detail'
+
+    @classmethod
+    def media_event_files(cls, event_uuid: str) -> str:
+        """Cache key for all media files in an event
+
+        Args:
+            event_uuid: Event UUID
+
+        Returns:
+            str: Cache key like 'media:event:abc-123:files'
+        """
+        return f'{cls.MEDIA_PREFIX}:event:{event_uuid}:files'
+
+    @classmethod
+    def media_pattern(cls, identifier: str) -> str:
+        """Pattern to match media-related cache keys
+
+        Args:
+            identifier: UUID or prefix to match
+
+        Returns:
+            str: Pattern like 'media:abc-123:*'
+        """
+        return f'{cls.MEDIA_PREFIX}:{identifier}:*'
+
+    # ── Album Keys ─────────────────────────────────────────────────────────
+
+    @classmethod
+    def album_detail(cls, album_uuid: str) -> str:
+        """Cache key for album detail
+
+        Args:
+            album_uuid: Album UUID
+
+        Returns:
+            str: Cache key like 'album:abc-123:detail'
+        """
+        return f'{cls.ALBUM_PREFIX}:{album_uuid}:detail'
+
+    @classmethod
+    def album_event_list(cls, event_uuid: str) -> str:
+        """Cache key for all albums in an event
+
+        Args:
+            event_uuid: Event UUID
+
+        Returns:
+            str: Cache key like 'album:event:abc-123:list'
+        """
+        return f'{cls.ALBUM_PREFIX}:event:{event_uuid}:list'
+
+    @classmethod
+    def album_event_pattern(cls, event_uuid: str) -> str:
+        """Pattern for every album-scoped cache entry associated with an event."""
+        return f'{cls.ALBUM_PREFIX}:event:{event_uuid}:*'
+
+    @classmethod
+    def album_pattern(cls, identifier: str) -> str:
+        """Pattern to match album-related cache keys
+
+        Args:
+            identifier: UUID or prefix to match
+
+        Returns:
+            str: Pattern like 'album:abc-123:*'
+        """
+        return f'{cls.ALBUM_PREFIX}:{identifier}:*'
+
     # Pattern generators for bulk operations
     @classmethod
     def user_pattern(cls, user_id: int) -> str:

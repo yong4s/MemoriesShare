@@ -41,14 +41,6 @@ class UserAuthenticationError(UserException):
     default_code = 'authentication_error'
 
 
-class UserNotFoundError(UserException):
-    """Raised when requested user is not found"""
-
-    status_code = status.HTTP_404_NOT_FOUND
-    default_detail = 'User not found'
-    default_code = 'user_not_found'
-
-
 class EmailAlreadyExistsError(UserException):
     """Raised when email address is already in use"""
 
@@ -57,33 +49,17 @@ class EmailAlreadyExistsError(UserException):
     default_code = 'email_already_exists'
 
 
-class UserPermissionError(UserException):
-    """Raised when user lacks required permissions"""
+class GuestInviteRegisteredConflictError(UserException):
+    """Raised when a guest invitation targets an email that belongs to a registered user.
 
-    status_code = status.HTTP_403_FORBIDDEN
-    default_detail = 'Insufficient permissions'
-    default_code = 'permission_error'
+    A registered account must explicitly accept an event invitation; silently
+    linking it as a "guest" would be an authorization-bypass vector.
+    """
 
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    default_detail = 'Email belongs to a registered account; explicit acceptance required'
+    default_code = 'guest_invite_registered_conflict'
 
-class InvitationTokenError(UserException):
-    """Raised when invitation token is invalid or expired"""
-
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = 'Invalid or expired invitation token'
-    default_code = 'invalid_invitation_token'
-
-
-class UserConversionError(UserException):
-    """Raised when converting between user types fails"""
-
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = 'User type conversion failed'
-    default_code = 'user_conversion_error'
-
-
-class UserDeactivationError(UserException):
-    """Raised when user deactivation fails"""
-
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = 'User deactivation failed'
-    default_code = 'user_deactivation_error'
+    def __init__(self, detail: str | None = None, code: str | None = None):
+        super().__init__(detail=detail, code=code)
+        self.error_code = code or self.default_code
