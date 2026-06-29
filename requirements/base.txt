@@ -1,5 +1,6 @@
 bpython==0.24
 Django==5.0.4
+setuptools<81
 django-cors-headers==4.3.1
 django-environ==0.11.2
 django-extensions==3.2.3
@@ -31,4 +32,9 @@ Pillow>=10.0.0
 celery[redis]==5.3.4
 redis>=4.5.2,<5.0.0
 django-redis==5.4.0
+django-celery-beat==2.7.0
+flower==2.0.1
 
+# Email processing and templates
+bleach==6.0.0
+premailer==3.10.0

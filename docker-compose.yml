@@ -8,13 +8,14 @@ x-base: &base-backend
   env_file:
     - .env
   environment:
-    DATABASE_URL: postgres://db_user:db_password@db:5432/db_name
+    DATABASE_URL: postgres://postgres:postgres@db:5432/postgres
     REDIS_URL: redis://redis:6379/2
     CELERY_BROKER_URL: redis://redis:6379/0
     CELERY_RESULT_BACKEND: redis://redis:6379/1
     DEBUG: "on"
     ENVIRONMENT: development
-    ALLOWED_HOSTS: localhost,0.0.0.0
+    ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,backend,.ngrok-free.app,.ngrok.io
+    FRONTEND_URL: http://localhost:3000
   volumes:
     - .:/code:delegated
   depends_on:
@@ -60,6 +61,35 @@ services:
     ports:
       - "8000:8000"
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    command: sh -c "pnpm install --frozen-lockfile=false --force && pnpm run dev"
+    environment:
+      OPENAPI_INPUT: http://backend:8000/api/schema/?format=json
+    volumes:
+      - .:/app:delegated
+      - /app/node_modules
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - "http"
+      - "http://frontend:3000"
+      - "--log=stdout"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    ports:
+      - "4040:4040"
+    depends_on:
+      - frontend
+
   celery-worker:
     <<: *base-backend
     build: .
@@ -91,7 +121,7 @@ services:
   celery-flower:
     <<: *base-backend
     build: .
-    command: celery -A settings flower --port=5555
+    command: python -m flower flower --broker=redis://redis:6379/0 --port=5555
     ports:
       - "5555:5555"
     environment:
@@ -103,5 +133,3 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-

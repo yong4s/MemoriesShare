@@ -1,0 +1,30 @@
+# Secrets — never bake real env files into an image layer
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Node / frontend deps and stores
+node_modules/
+.pnpm-store/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Logs
+*.log
+
+# NOTE: .git is intentionally NOT ignored here because the current Dockerfile
+# does `COPY .git` for its pre-commit step. Drop that COPY (see audit) and then
+# add `.git` here.
