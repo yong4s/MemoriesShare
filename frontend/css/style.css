@@ -1,0 +1,334 @@
+@import 'tailwindcss';
+
+/* Dark variant — applied when <html data-theme="dark"> is set */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* =========================================================================
+ * Theme tokens — runtime CSS custom properties
+ * Light theme = warm cream + soft lavender + pastel accents
+ * Dark  theme = deep plum-ink + glowing lavender + muted pastels
+ * ======================================================================= */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --surface-0: #fbf6f0;   /* page background — warm cream */
+  --surface-1: #ffffff;   /* primary card */
+  --surface-2: #f5ecdf;   /* elevated card / tinted panel */
+  --surface-3: #efe3d0;   /* hover / inset */
+  --surface-glass: rgba(255, 255, 255, 0.62);
+  --surface-glass-strong: rgba(255, 255, 255, 0.82);
+
+  /* Ink (typography) */
+  --ink-1: #2a2130;       /* body text */
+  --ink-2: #544858;       /* muted */
+  --ink-3: #8a7b91;       /* faint */
+  --ink-inverse: #ffffff;
+
+  /* Borders */
+  --border-subtle: rgba(42, 33, 48, 0.08);
+  --border-strong: rgba(42, 33, 48, 0.16);
+
+  /* Shadows — soft, low opacity, warm tint */
+  --shadow-sm: 0 1px 2px 0 rgba(124, 95, 160, 0.08);
+  --shadow-md: 0 4px 14px -2px rgba(124, 95, 160, 0.12), 0 2px 4px -2px rgba(124, 95, 160, 0.08);
+  --shadow-lg: 0 18px 40px -12px rgba(124, 95, 160, 0.22), 0 4px 10px -4px rgba(124, 95, 160, 0.12);
+  --shadow-glow: 0 0 0 3px rgba(165, 126, 239, 0.18);
+
+  /* Mesh gradient stops for hero backgrounds */
+  --mesh-a: #f7e6d9;
+  --mesh-b: #e8dbff;
+  --mesh-c: #dfe9d8;
+  --mesh-d: #fde2d3;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-0: #141018;
+  --surface-1: #1d1724;
+  --surface-2: #241c2d;
+  --surface-3: #2e2538;
+  --surface-glass: rgba(29, 23, 36, 0.58);
+  --surface-glass-strong: rgba(29, 23, 36, 0.82);
+
+  --ink-1: #f3eef9;
+  --ink-2: #c6bcd4;
+  --ink-3: #8a7fa2;
+  --ink-inverse: #1a1321;
+
+  --border-subtle: rgba(243, 238, 249, 0.08);
+  --border-strong: rgba(243, 238, 249, 0.16);
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px -4px rgba(0, 0, 0, 0.45), 0 3px 6px -3px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 22px 48px -14px rgba(0, 0, 0, 0.6), 0 6px 14px -6px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 0 3px rgba(189, 157, 255, 0.25);
+
+  --mesh-a: #2a1e3d;
+  --mesh-b: #1e2d3d;
+  --mesh-c: #3d2636;
+  --mesh-d: #1f1a2e;
+}
+
+/* =========================================================================
+ * Tailwind theme — maps CSS vars into generated utilities
+ * Exposes: bg-surface, text-ink, border-subtle, bg-brand-500, bg-peach, etc.
+ * ======================================================================= */
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Brand — Soft Lavender scale (replaces previous indigo brand) */
+  --color-brand-50:  #f7f2ff;
+  --color-brand-100: #ebe0ff;
+  --color-brand-200: #d7c2ff;
+  --color-brand-300: #bd9dff;
+  --color-brand-400: #a57eef;
+  --color-brand-500: #8c60e0;
+  --color-brand-600: #7547c9;
+  --color-brand-700: #5f39a6;
+  --color-brand-800: #4b2e83;
+  --color-brand-900: #3a2466;
+  --color-brand-950: #231642;
+
+  /* Pastel accents */
+  --color-peach-100: #ffe9de;
+  --color-peach-300: #ffc5aa;
+  --color-peach-500: #f4a07f;
+  --color-peach-700: #c26a48;
+
+  --color-sage-100: #e4efe3;
+  --color-sage-300: #b8d4b9;
+  --color-sage-500: #86b389;
+  --color-sage-700: #557a59;
+
+  --color-blush-100: #fce4ea;
+  --color-blush-300: #f5bac6;
+  --color-blush-500: #e88aa0;
+  --color-blush-700: #b8566f;
+
+  --color-butter-100: #fff4d3;
+  --color-butter-300: #f7dd8e;
+  --color-butter-500: #e6c254;
+  --color-butter-700: #a6872b;
+}
+
+@theme inline {
+  /* Semantic tokens (wrap the runtime CSS vars) */
+  --color-surface: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink-1);
+  --color-ink-muted: var(--ink-2);
+  --color-ink-faint: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+
+  --shadow-soft-sm: var(--shadow-sm);
+  --shadow-soft-md: var(--shadow-md);
+  --shadow-soft-lg: var(--shadow-lg);
+}
+
+/* =========================================================================
+ * Base layer — document defaults + smooth theme transitions
+ * ======================================================================= */
+
+@layer base {
+  html {
+    background-color: var(--surface-0);
+    color: var(--ink-1);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--surface-0);
+    color: var(--ink-1);
+    min-height: 100vh;
+  }
+
+  /* Animate theme switch — color transitions only (no layout jank) */
+  html,
+  body,
+  button,
+  input,
+  textarea,
+  select,
+  [data-theme-transition] {
+    transition:
+      background-color 0.28s ease,
+      border-color 0.28s ease,
+      color 0.24s ease,
+      fill 0.24s ease,
+      stroke 0.24s ease,
+      box-shadow 0.28s ease;
+  }
+
+  /* Selection */
+  ::selection {
+    background: var(--color-brand-300);
+    color: var(--ink-inverse);
+  }
+
+  /* Thinner, themed scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-brand-400);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+}
+
+/* =========================================================================
+ * Utilities — glass, mesh, skeleton, animated gradient, ring-glow
+ * ======================================================================= */
+
+/* Glass morphism — frosted semi-transparent surface */
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-strong {
+  background: var(--surface-glass-strong);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Animated pastel mesh background */
+.bg-mesh {
+  background-color: var(--surface-0);
+  background-image:
+    radial-gradient(at 18% 12%, var(--mesh-a) 0px, transparent 45%),
+    radial-gradient(at 82% 18%, var(--mesh-b) 0px, transparent 50%),
+    radial-gradient(at 72% 82%, var(--mesh-c) 0px, transparent 48%),
+    radial-gradient(at 12% 78%, var(--mesh-d) 0px, transparent 52%);
+  background-attachment: fixed;
+}
+
+.bg-mesh-animated {
+  position: relative;
+  isolation: isolate;
+}
+
+.bg-mesh-animated::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--surface-0);
+  background-image:
+    radial-gradient(at 18% 12%, var(--mesh-a) 0px, transparent 45%),
+    radial-gradient(at 82% 18%, var(--mesh-b) 0px, transparent 50%),
+    radial-gradient(at 72% 82%, var(--mesh-c) 0px, transparent 48%),
+    radial-gradient(at 12% 78%, var(--mesh-d) 0px, transparent 52%);
+  animation: mesh-drift 24s ease-in-out infinite alternate;
+}
+
+@keyframes mesh-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-2%, 1%, 0) scale(1.04); }
+  100% { transform: translate3d(1.5%, -1.5%, 0) scale(1.02); }
+}
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 40%,
+    var(--surface-2) 80%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.75rem;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Soft glow ring on focus/hover for interactive surfaces */
+.ring-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+/* =========================================================================
+ * Component animations (preserved + added)
+ * ======================================================================= */
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(100%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.72; }
+}
+
+.animate-fade-in   { animation: fade-in   0.30s ease-out both; }
+.animate-slide-up  { animation: slide-up  0.35s ease-out both; }
+.animate-toast-in  { animation: toast-in  0.30s ease-out both; }
+.animate-toast-out { animation: toast-out 0.25s ease-in  both; }
+.animate-float     { animation: float     3.2s ease-in-out infinite; }
+.animate-pulse-soft{ animation: pulse-soft 2s ease-in-out infinite; }
+
+/* =========================================================================
+ * Accessibility — honor reduced-motion
+ * ======================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .bg-mesh-animated::before {
+    animation: none;
+  }
+}
