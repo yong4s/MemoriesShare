@@ -10,7 +10,6 @@ urlpatterns = [
     path('auth/refresh/', views.CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', views.LogoutView.as_view(), name='logout'),
     path('auth/register/', views.UserRegistrationView.as_view(), name='register'),
-    path('auth/guest-login/', views.AnonymousGuestLoginView.as_view(), name='guest_login'),
     path('auth/status/', views.auth_status, name='auth_status'),
     # Passwordless authentication
     path(
@@ -28,8 +27,18 @@ urlpatterns = [
         views.SetPasswordView.as_view(),
         name='set_password',
     ),
+    path(
+        'auth/login-methods/',
+        views.LoginMethodsView.as_view(),
+        name='login_methods',
+    ),
     # Profile management
     path('profile/', views.UserProfileView.as_view(), name='profile'),
+    path(
+        'profile/set-password/',
+        views.AccountPasswordView.as_view(),
+        name='account_set_password',
+    ),
     path(
         'profile/change-password/',
         views.PasswordChangeView.as_view(),

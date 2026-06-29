@@ -1,18 +1,13 @@
 import logging
 from datetime import timedelta
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError
-from django.db.models import Count
 from django.db.models import Q
 from django.db.models import QuerySet
 from django.utils import timezone
 
 from apps.accounts.models.custom_user import CustomUser
+from apps.shared.decorators.database import handle_create_errors
+from apps.shared.decorators.database import handle_update_errors
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +43,18 @@ class UserDAL:
         except CustomUser.DoesNotExist:
             return None
 
-    def get_by_invite_token(self, invite_token: str) -> CustomUser | None:
-        """Get guest user by invitation token"""
-        if not invite_token:
+    def get_login_capabilities(self, email: str) -> dict | None:
+        """Return login capability flags for an email, or None if no user exists."""
+        user = self.get_by_email(email, registered_only=False)
+        if user is None:
             return None
+        return {
+            'has_password': user.has_usable_password(),
+            'preferred': user.preferred_login_method,
+            'is_active': user.is_active,
+        }
 
-        try:
-            return CustomUser.objects.select_related().get(invite_token_used=invite_token, is_registered=False)
-        except CustomUser.DoesNotExist:
-            return None
-
+    @handle_create_errors(model_name='CustomUser')
     def create_registered_user(
         self,
         email: str,
@@ -67,52 +64,52 @@ class UserDAL:
         **extra_fields,
     ) -> CustomUser:
         """Create registered user through manager"""
-        try:
-            user = CustomUser.objects.create_user(
-                email=email,
-                password=password,
-                is_registered=True,
-                first_name=first_name,
-                last_name=last_name,
-                **extra_fields,
-            )
-            logger.info(f'Created registered user: {email} (ID: {user.id})')
-            return user
-        except IntegrityError as e:
-            logger.exception(f'Integrity error creating user: {e}')
-            raise
+        user = CustomUser.objects.create_user(
+            email=email,
+            password=password,
+            is_registered=True,
+            first_name=first_name,
+            last_name=last_name,
+            **extra_fields,
+        )
+        logger.info(f'Created registered user: {email} (ID: {user.id})')
+        return user
 
-    def create_guest_user(self, guest_name: str, invite_token: str | None = None, **extra_fields) -> CustomUser:
-        """Create guest user"""
-        try:
-            user = CustomUser.objects.create(
-                guest_name=guest_name,
-                invite_token_used=invite_token,
-                is_registered=False,
-                is_active=True,
-                **extra_fields,
-            )
-            user.set_unusable_password()
-            user.save()
+    @handle_create_errors(model_name='CustomUser')
+    def create_guest_user(
+        self,
+        guest_name: str,
+        email: str,
+        **extra_fields,
+    ) -> CustomUser:
+        """Create non-registered email-based user (passwordless/guest)."""
+        normalized_email = email.lower().strip()
+        if not normalized_email:
+            msg = 'Email is required for non-registered users'
+            raise ValueError(msg)
 
-            logger.info(f'Created guest user: {guest_name} (ID: {user.id})')
-            return user
-        except Exception as e:
-            logger.exception(f'Error creating guest user: {e}')
-            raise
+        user = CustomUser.objects.create(
+            email=normalized_email,
+            guest_name=guest_name,
+            is_registered=False,
+            is_active=True,
+            **extra_fields,
+        )
+        user.set_unusable_password()
+        user.save(update_fields=['password'])
 
+        logger.info(f'Created guest user: {guest_name} (ID: {user.id})')
+        return user
+
+    @handle_update_errors(model_name='CustomUser')
     def update_user(self, user: CustomUser, **update_fields) -> CustomUser:
         """Update user with given fields"""
-        try:
-            for field, value in update_fields.items():
-                setattr(user, field, value)
+        for field, value in update_fields.items():
+            setattr(user, field, value)
 
-            user.save(update_fields=list(update_fields.keys()))
-            logger.info(f'Updated user {user.id} fields: {list(update_fields.keys())}')
-            return user
-        except Exception as e:
-            logger.exception(f'Error updating user {user.id}: {e}')
-            raise
+        user.save(update_fields=list(update_fields.keys()))
+        logger.info(f'Updated user {user.id} fields: {list(update_fields.keys())}')
+        return user
 
     def get_registered_users(self, limit: int | None = None) -> QuerySet[CustomUser]:
         """Get registered users queryset"""
@@ -145,14 +142,6 @@ class UserDAL:
         )
 
         return queryset.filter(search_filter)
-
-    def get_active_users(self) -> QuerySet[CustomUser]:
-        """Get active users"""
-        return CustomUser.objects.filter(is_active=True).select_related()
-
-    def get_inactive_users(self) -> QuerySet[CustomUser]:
-        """Get inactive users"""
-        return CustomUser.objects.filter(is_active=False).select_related()
 
     def cleanup_inactive_guests(self, days_old: int = 30) -> int:
         """Remove old inactive guest users"""
@@ -190,10 +179,3 @@ class UserDAL:
     def get_inactive_user_count(self) -> int:
         """Get inactive user count"""
         return CustomUser.objects.filter(is_active=False).count()
-
-    def get_users_with_statistics(self) -> QuerySet[CustomUser]:
-        """Get users with event participation statistics"""
-        return CustomUser.objects.select_related().annotate(
-            events_owned=Count('created_events', distinct=True),
-            events_participated=Count('joined_events', distinct=True),
-        )

@@ -1,11 +1,9 @@
-from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.accounts.models import CustomUser
-from apps.events.models.invite_link_event import InviteEventLink
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -70,6 +68,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile data"""
 
+    preferred_login_method = serializers.ChoiceField(
+        choices=CustomUser.LoginMethod.choices,
+        required=False,
+    )
+    has_password = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomUser
         fields = (
@@ -85,6 +89,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_anonymous_guest',
             'guest_name',
             'date_joined',
+            'preferred_login_method',
+            'has_password',
+            'password_changed_at',
         )
         read_only_fields = (
             'id',
@@ -92,7 +99,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_guest',
             'is_registered',
             'is_anonymous_guest',
+            'has_password',
+            'password_changed_at',
         )
+
+    def get_has_password(self, obj: CustomUser) -> bool:
+        return obj.has_usable_password()
+
+    def validate_preferred_login_method(self, value: str) -> str:
+        user = getattr(self.instance, 'pk', None) and self.instance
+        if value == CustomUser.LoginMethod.PASSWORD and user and not user.has_usable_password():
+            msg = 'Cannot prefer password login without a password set'
+            raise serializers.ValidationError(msg)
+        return value
 
 
 class PasswordChangeSerializer(serializers.Serializer):
@@ -120,48 +139,6 @@ class PasswordChangeSerializer(serializers.Serializer):
             raise serializers.ValidationError({'new_password': e.messages})
 
         return attrs
-
-
-class UserLoginSerializer(serializers.Serializer):
-    """Serializer for session-based login"""
-
-    email = serializers.EmailField()
-    password = serializers.CharField()
-
-    def validate(self, attrs):
-        email = attrs.get('email')
-        password = attrs.get('password')
-
-        if email and password:
-            user = authenticate(request=self.context.get('request'), username=email, password=password)
-            if not user:
-                msg = 'Invalid email or password.'
-                raise serializers.ValidationError(msg)
-            if not user.is_active:
-                msg = 'User account is disabled.'
-                raise serializers.ValidationError(msg)
-            attrs['user'] = user
-            return attrs
-        msg = 'Must include email and password.'
-        raise serializers.ValidationError(msg)
-
-
-class AnonymousGuestSerializer(serializers.Serializer):
-    """Serializer for anonymous guest authentication"""
-
-    invite_token = serializers.CharField(max_length=64)
-    guest_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
-
-    def validate_invite_token(self, value):
-        try:
-            invite = InviteEventLink.objects.get(invite_token=value)
-            if not invite.is_active:
-                msg = 'Invalid or expired invite token.'
-                raise serializers.ValidationError(msg)
-        except InviteEventLink.DoesNotExist:
-            msg = 'Invalid or expired invite token.'
-            raise serializers.ValidationError(msg)
-        return value
 
 
 class PasswordlessRequestSerializer(serializers.Serializer):
@@ -204,9 +181,26 @@ class SetPasswordSerializer(serializers.Serializer):
             msg = 'Passwords do not match'
             raise serializers.ValidationError(msg)
 
-        # Django password validation
-        from django.contrib.auth.password_validation import validate_password
-
-        validate_password(attrs['password'])
+        try:
+            validate_password(attrs['password'])
+        except ValidationError as exc:
+            raise serializers.ValidationError({'password': exc.messages})
 
         return attrs
+
+
+class LoginMethodsRequestSerializer(serializers.Serializer):
+    """Request body for login-methods discovery endpoint"""
+
+    email = serializers.EmailField()
+
+    def validate_email(self, value: str) -> str:
+        return value.lower().strip()
+
+
+class LoginMethodsResponseSerializer(serializers.Serializer):
+    """Response body for login-methods discovery endpoint"""
+
+    password = serializers.BooleanField()
+    passwordless = serializers.BooleanField()
+    preferred = serializers.ChoiceField(choices=CustomUser.LoginMethod.choices)

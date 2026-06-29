@@ -1,14 +1,13 @@
 import logging
-from typing import Dict
-from typing import Optional
+from typing import Any
 
 from django.contrib.auth import authenticate
 from django.db import transaction
+from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.dal.user_dal import UserDAL
 from apps.accounts.models.custom_user import CustomUser
-from apps.events.models.invite_link_event import InviteEventLink
 from apps.shared.exceptions.user_exceptions import UserAuthenticationError
 from apps.shared.exceptions.user_exceptions import UserCreationError
 from apps.shared.exceptions.user_exceptions import UserValidationError
@@ -19,10 +18,10 @@ logger = logging.getLogger(__name__)
 class AuthService:
     """Authentication and JWT token management service"""
 
-    def __init__(self, user_dal: UserDAL = None):
+    def __init__(self, user_dal: UserDAL | None = None):
         self.user_dal = user_dal or UserDAL()
 
-    def authenticate_user(self, email: str, password: str) -> dict[str, any]:
+    def authenticate_user(self, email: str, password: str) -> dict[str, Any]:
         """Authenticate user and return tokens with user data"""
         try:
             user = authenticate(email=email, password=password)
@@ -38,7 +37,6 @@ class AuthService:
                 msg = 'Guest users cannot login with credentials'
                 raise UserAuthenticationError(msg)
 
-            # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
 
             logger.info(f'Successful authentication for user: {email}')
@@ -80,15 +78,13 @@ class AuthService:
             return False
 
     @transaction.atomic
-    def register_user(self, email: str, password: str, first_name: str = '', last_name: str = '') -> dict[str, any]:
+    def register_user(self, email: str, password: str, first_name: str = '', last_name: str = '') -> dict[str, Any]:
         """Register new user and return tokens"""
         try:
-            # Check if user exists
             if self.user_dal.get_by_email(email, registered_only=True):
                 msg = 'User with this email already exists'
                 raise UserValidationError(msg)
 
-            # Create user
             user = self.user_dal.create_registered_user(
                 email=email,
                 password=password,
@@ -96,7 +92,6 @@ class AuthService:
                 last_name=last_name,
             )
 
-            # Generate tokens
             refresh = RefreshToken.for_user(user)
 
             logger.info(f'Registered new user: {email}')
@@ -113,70 +108,6 @@ class AuthService:
             logger.exception(f'Registration error: {e}')
             raise UserCreationError(str(e))
 
-    @transaction.atomic
-    def authenticate_guest(self, invite_token: str, guest_name: str = '') -> dict[str, any]:
-        """Authenticate guest user with invite token"""
-        try:
-            # Validate invite token (convert string to UUID if needed)
-            try:
-                if isinstance(invite_token, str) and len(invite_token) == 36:
-                    # UUID format from InviteEventLink
-                    invite = InviteEventLink.objects.get(invite_token=invite_token)
-                else:
-                    # Handle string token format
-                    invite = InviteEventLink.objects.filter(invite_token=invite_token).first()
-
-                if not invite or not invite.is_active:
-                    msg = 'Invalid or expired invitation'
-                    raise UserValidationError(msg)
-
-            except InviteEventLink.DoesNotExist:
-                msg = 'Invalid invitation token'
-                raise UserValidationError(msg)
-
-            # Check if token already used
-            existing_user = self.user_dal.get_by_invite_token(str(invite.invite_token))
-            if existing_user:
-                # Return existing guest user
-                refresh = RefreshToken.for_user(existing_user)
-                logger.info(f'Guest user login with existing token: {str(invite.invite_token)[:8]}...')
-
-                return {
-                    'user': existing_user,
-                    'tokens': {
-                        'access': str(refresh.access_token),
-                        'refresh': str(refresh),
-                    },
-                }
-
-            # Create new guest user
-            final_guest_name = guest_name or f'Guest User {invite.event.event_name[:20]}'
-
-            guest_user = self.user_dal.create_guest_user(
-                guest_name=final_guest_name, invite_token=str(invite.invite_token)
-            )
-
-            # Mark invite as used
-            invite.used_count += 1
-            invite.save(update_fields=['used_count'])
-
-            # Generate tokens
-            refresh = RefreshToken.for_user(guest_user)
-
-            logger.info(f'Created guest user from invite: {final_guest_name}')
-
-            return {
-                'user': guest_user,
-                'tokens': {
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh),
-                },
-            }
-
-        except Exception as e:
-            logger.exception(f'Guest authentication error: {e}')
-            raise UserAuthenticationError(str(e))
-
     def change_password(self, user: CustomUser, old_password: str, new_password: str) -> bool:
         """Change user password"""
         try:
@@ -189,7 +120,8 @@ class AuthService:
                 raise UserValidationError(msg)
 
             user.set_password(new_password)
-            user.save(update_fields=['password'])
+            user.password_changed_at = timezone.now()
+            user.save(update_fields=['password', 'password_changed_at'])
 
             logger.info(f'Password changed for user {user.email}')
             return True
@@ -197,6 +129,28 @@ class AuthService:
         except Exception as e:
             logger.exception(f'Password change error for user {user.id}: {e}')
             raise UserValidationError(str(e))
+
+    def get_login_methods(self, email: str) -> dict[str, Any]:
+        """Return available sign-in methods for an email.
+
+        Always returns an identical response shape for known and unknown
+        emails to avoid enumeration. Passwordless is universally available
+        (any valid email may request a code); password is only true for
+        users who have actually set one.
+        """
+        normalized = (email or '').lower().strip()
+        info = self.user_dal.get_login_capabilities(normalized)
+        if info is None:
+            return {
+                'password': False,
+                'passwordless': True,
+                'preferred': CustomUser.LoginMethod.PASSWORDLESS,
+            }
+        return {
+            'password': bool(info['has_password']),
+            'passwordless': True,
+            'preferred': info['preferred'],
+        }
 
     def get_user_from_token(self, token: str) -> CustomUser | None:
         """Get user from JWT token"""
