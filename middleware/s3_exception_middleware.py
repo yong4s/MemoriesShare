@@ -26,7 +26,7 @@ class S3ExceptionMiddleware:
         # S3 Service Exceptions
         if isinstance(exception, S3ServiceError):
             return JsonResponse(
-                {'error': str(exception)},
+                {'error': exception.default_detail},
                 status=getattr(exception, 'status_code', status.HTTP_500_INTERNAL_SERVER_ERROR),
             )
         if isinstance(
@@ -34,7 +34,7 @@ class S3ExceptionMiddleware:
             S3UploadException | S3BucketNotFoundError | S3BucketPermissionError,
         ):
             return JsonResponse(
-                {'error': str(exception)},
+                {'error': exception.default_detail},
                 status=getattr(exception, 'status_code', status.HTTP_503_SERVICE_UNAVAILABLE),
             )
 

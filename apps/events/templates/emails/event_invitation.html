@@ -1,0 +1,64 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}You're invited to {{ event_name }} - {{ app_name|default:"MediaFlow" }}{% endblock %}
+
+{% block header_title %}You're invited!{% endblock %}
+
+{% block content %}
+    <h2 style="margin-bottom: 16px; color: #333; font-weight: 400;">
+        {% if recipient_name %}Hi {{ recipient_name }},{% else %}Hi there,{% endif %}
+    </h2>
+
+    <p class="mb-3" style="font-size: 17px; color: #333;">
+        {% if organizer_name %}<strong>{{ organizer_name }}</strong>{% else %}Someone{% endif %}
+        invited you to an event on {{ app_name|default:"MediaFlow" }}.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+           style="margin: 0 auto 32px; max-width: 480px; width: 100%; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+        <tr>
+            <td style="padding: 24px; text-align: left;">
+                <p style="margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #6c757d;">
+                    Event
+                </p>
+                <h3 style="margin: 0 0 18px; font-size: 22px; font-weight: 600; color: #2a2130;">
+                    {{ event_name }}
+                </h3>
+
+                <p style="margin: 0 0 6px; font-size: 14px; color: #544858;">
+                    <strong style="color: #2a2130;">When:</strong>
+                    {{ event_date_human }}{% if event_time_human %}, {{ event_time_human }}{% elif all_day %} (all day){% endif %}
+                </p>
+
+                {% if location or address %}
+                <p style="margin: 0 0 6px; font-size: 14px; color: #544858;">
+                    <strong style="color: #2a2130;">Where:</strong>
+                    {% if location %}{{ location }}{% endif %}{% if location and address %} — {% endif %}{% if address %}{{ address }}{% endif %}
+                </p>
+                {% endif %}
+
+                {% if description %}
+                <p style="margin: 12px 0 0; font-size: 14px; color: #544858; line-height: 1.5;">
+                    {{ description|linebreaksbr }}
+                </p>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+
+    {% if event_url %}
+    <a href="{{ event_url }}" class="button"
+       style="display: inline-block; padding: 14px 32px; background-color: #8c60e0; color: #ffffff;
+              text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        View Event
+    </a>
+    {% endif %}
+
+    <p class="text-muted mb-2" style="margin-top: 28px;">
+        This invitation was sent to <strong>{{ recipient_email }}</strong>.
+    </p>
+
+    <p class="text-muted">
+        Not expecting this? You can ignore this email — no action will be taken.
+    </p>
+{% endblock %}

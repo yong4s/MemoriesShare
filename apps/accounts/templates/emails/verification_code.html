@@ -1,0 +1,37 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Код входу - {{ app_name|default:"MediaFlow" }}{% endblock %}
+
+{% block header_title %}Код входу{% endblock %}
+
+{% block content %}
+    <h2 style="margin-bottom: 24px; color: #333; font-weight: 400;">
+        Привіт! Ось ваш код для входу:
+    </h2>
+    
+    <div class="code-display">
+        {{ code }}
+    </div>
+    
+    <p class="mb-3" style="font-size: 18px; color: #333;">
+        Введіть цей код для завершення входу в систему
+    </p>
+    
+    <div class="security-notice">
+        <span class="icon">🔒</span>
+        <strong>Важливо:</strong> Код діє лише {{ expiry_minutes }} хвилин та може бути використаний тільки один раз.
+    </div>
+    
+    <div class="security-notice">
+        <span class="icon">⚠️</span>
+        <strong>Безпека:</strong> Ніколи не діліться цим кодом ні з ким. Команда {{ app_name|default:"MediaFlow" }} ніколи не попросить у вас код.
+    </div>
+    
+    <p class="text-muted mb-2">
+        Код було надіслано на адресу: <strong>{{ email }}</strong>
+    </p>
+    
+    <p class="text-muted">
+        Якщо ви не запитували цей код, проігноруйте це повідомлення.
+    </p>
+{% endblock %}

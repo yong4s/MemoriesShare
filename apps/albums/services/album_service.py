@@ -1,172 +1,157 @@
+from __future__ import annotations
+
 import logging
 
-from django.shortcuts import get_object_or_404
-from rest_framework.exceptions import PermissionDenied
+from django.db import transaction
 
-from apps.accounts.exceptions import InvalidUserIdError
-from apps.albums.dal import AlbumDAL
+from apps.albums.cache.album_cache_service import album_cache_service as default_album_cache
+from apps.albums.cache.album_cache_service import AlbumCacheService
+from apps.albums.dal.album_dal import AlbumDAL
+from apps.albums.exceptions import AlbumPermissionError
 from apps.albums.models import Album
-from apps.shared.exceptions.exception import S3ServiceError
-from apps.shared.storage.optimized_s3_service import OptimizedS3Service
-from apps.shared.utils.general import get_user_by_id
+from apps.albums.tasks import cleanup_album_s3_prefix_task
+from apps.events.services.permission_service import EventPermissionService
 
 logger = logging.getLogger(__name__)
 
 
 class AlbumService:
-    """Service for album business logic operations."""
+    """Service for album business logic operations with constructor DI."""
 
-    def __init__(self):
-        """Initialize service with dependencies."""
-        self.s3service = OptimizedS3Service()
-        self.dal = AlbumDAL()
+    def __init__(
+        self,
+        dal: AlbumDAL,
+        permission_service: EventPermissionService,
+        cache_service: AlbumCacheService | None = None,
+    ):
+        self.dal = dal
+        self.permission_service = permission_service
+        self.cache_service = cache_service or default_album_cache
 
-    def create_album(self, serializer, event, user_id):
-        """Create album for event with permission validation and S3 integration."""
-        if not user_id or not event:
-            logger.warning(f'Album creation attempt with invalid parameters: user_id={user_id}, event={event}')
-            msg = 'You do not have permission to add albums to this event.'
-            raise PermissionDenied(msg)
+    @transaction.atomic
+    def create_album(self, event, user_id, name, description='', is_public=False):
+        """Create album for event with permission validation.
 
-        try:
-            user = get_user_by_id(user_id)
-        except InvalidUserIdError:
-            logger.exception(f'Invalid user ID provided for album creation: {user_id}')
-            raise
-
-        # Check if user is event owner
-        if event.user_id != user_id:
+        S3 prefix is stored in DB but no S3 folder is created —
+        the path materializes automatically when the first file is uploaded.
+        """
+        if not self.permission_service.is_event_owner(event, user_id):
             logger.warning(f'User {user_id} attempted to create album for event {event.id} without ownership')
-            msg = 'Only event owner can create albums.'
-            raise PermissionDenied(msg)
+            raise AlbumPermissionError(action='create', album_id=str(event.event_uuid))
 
-        # Create album object without saving to DB first
         album = Album(
             event=event,
-            name=serializer.validated_data['name'],
-            description=serializer.validated_data.get('description', ''),
-            is_public=serializer.validated_data.get('is_public', False),
+            name=name,
+            description=description,
+            is_public=is_public,
         )
 
-        # Generate S3 prefix before saving: users/{user_uuid}/events/{event_uuid}/albums/{album_uuid}
-        album_folder_name = f'users/{user.user_uuid}/events/{event.event_uuid}/albums/{album.album_uuid}'
-        album.album_s3_prefix = album_folder_name
-
-        try:
-            logger.info(f'Creating S3 folder: {album_folder_name}')
-            result = self.s3service.create_folder(album_folder_name)
-            logger.info(f'S3 folder creation result: {result}')
-
-            # Check if result contains error
-            if 'Error' in str(result):
-                msg = f'S3 folder creation failed: {result}'
-                raise Exception(msg)
-
-            # Save to DB only AFTER successful S3 folder creation
-            album.save()
-            logger.info(f'Album {album.album_uuid} created successfully with S3 prefix: {album_folder_name}')
-
-        except Exception as e:
-            # S3 folder creation failed - don't save to DB at all
-            logger.exception(f'Failed to create S3 folder for album: {e!s}')
-            msg = f'Failed to create album folder: {e!s}'
-            raise S3ServiceError(msg)
-
-        return album
-
-    def get_album(self, user_id, album_id):
-        album = self.dal.get_album_by_id(album_id)
-
-        if not self._is_owner_or_guest(album.event_id, user_id):
-            logger.warning(f'User {user_id} attempted to access album {album_id} without permission')
-            msg = 'You do not have permission to view this album.'
-            raise PermissionDenied(msg)
-
-        return album
-
-    def get_albums_for_event(self, user_id, event_id):
-        if not self._is_owner_or_guest(event_id, user_id):
-            logger.warning(f'User {user_id} attempted to access albums for event {event_id} without permission')
-            msg = 'You do not have permission to view albums for this event.'
-            raise PermissionDenied(msg)
-
-        return self.dal.get_all_event_albums(event_id)
-
-    def update_album(self, user_id, album_id, album_data):
-        """Update album with owner permission check."""
-        album = self.dal.get_album_by_id(album_id)
-
-        # Check if user is event owner
-        if album.event.user_id != user_id:
-            logger.warning(f'User {user_id} attempted to update album {album_id} without ownership')
-            msg = 'Only event owner can update albums.'
-            raise PermissionDenied(msg)
-
-        # Update album fields
-        for field, value in album_data.items():
-            if hasattr(album, field):
-                setattr(album, field, value)
+        album.album_s3_prefix = f'{event.s3_prefix}/albums/{album.album_uuid}'
 
         album.save()
-        logger.info(f'Album {album_id} updated successfully by user {user_id}')
+        logger.info(f'Album {album.album_uuid} created with S3 prefix: {album.album_s3_prefix}')
+
+        self._schedule_album_invalidation(
+            album_uuid=album.album_uuid,
+            event_uuid=event.event_uuid,
+        )
 
         return album
 
-    def delete_album(self, user_id, album_id):
-        """Delete album with S3 cleanup and permission check."""
-        album = self.dal.get_album_by_id(album_id)
+    def get_album_detail(self, album_uuid, user_id):
+        """Get album detail with permission check."""
+        album = self.dal.get_by_uuid_with_relations(album_uuid)
 
-        # Check if user is event owner
-        if album.event.user_id != user_id:
-            logger.warning(f'User {user_id} attempted to delete album {album_id} without ownership')
-            msg = 'You do not have permission to delete albums for this event.'
-            raise PermissionDenied(msg)
+        if not self._can_view_album(album, user_id):
+            logger.warning(f'User {user_id} attempted to access album {album_uuid} without permission')
+            raise AlbumPermissionError(action='view', album_id=str(album_uuid))
 
-        album_folder_url = album.album_s3_prefix
+        return album
 
-        try:
-            # First delete S3 structure
-            if album_folder_url:
-                logger.info(f'Deleting S3 folder: {album_folder_url}')
-                self.s3service.delete_folder(album_folder_url)
-                logger.info(f'S3 folder deleted successfully: {album_folder_url}')
-        except Exception as e:
-            logger.exception(f'Failed to delete S3 folder for album {album_id}: {e!s}')
-            msg = f'Failed to delete album folder: {e!s}'
-            raise S3ServiceError(msg)
+    def get_albums_for_event(self, event, user_id):
+        """Get albums for an event.
 
-        # Then delete from DB
-        result = self.dal.delete_album(album_id)
-        logger.info(f'Album {album_id} deleted successfully by user {user_id}')
+        Participants (any role) see every album; non-participants see only albums
+        explicitly marked public, and are denied if the event has none for them.
+        """
+        albums = self.dal.get_albums_for_event(event.id)
 
-        return result
+        if self.permission_service.is_user_participant(event, user_id):
+            return albums
 
-    def _is_owner_or_guest(self, event_id, user_id):
-        """Check if user is event owner or guest."""
-        try:
-            # Simple approach: get any album for this event to check permissions
-            albums = self.dal.get_all_event_albums(event_id)
-            if not albums:
-                return False
+        public_albums = [album for album in albums if album.is_public]
+        if not public_albums:
+            logger.warning(f'User {user_id} attempted to access albums for event {event.id} without permission')
+            raise AlbumPermissionError(action='view', album_id=str(event.event_uuid))
+        return public_albums
 
-            # Check if user is event owner through album's event relationship
-            return albums[0].event.user_id == user_id
-        except:
-            return False
+    @transaction.atomic
+    def update_album(self, album_uuid, album_data, user_id):
+        """Update album with owner permission check."""
+        album = self.dal.get_by_uuid_with_relations(album_uuid)
 
-    def get_album_statistics(self, album_id, user_id):
-        """Get album statistics including file count and total size."""
-        album = self.get_album(user_id, album_id)
+        if not self.permission_service.is_event_owner(album.event, user_id):
+            logger.warning(f'User {user_id} attempted to update album {album_uuid} without ownership')
+            raise AlbumPermissionError(action='update', album_id=str(album_uuid))
 
-        # Get statistics through DAL
-        stats = self.dal.get_album_statistics(album_id)
+        updated_album = self.dal.update(album, album_data)
+        logger.info(f'Album {album_uuid} updated successfully by user {user_id}')
 
-        return {
-            'album_id': album_id,
-            'album_name': album.name,
-            'total_files': stats.get('file_count', 0),
-            'total_size_bytes': stats.get('total_size', 0),
-            'created_at': album.created_at,
-            'last_modified': album.updated_at,
-            'is_public': album.is_public,
-        }
+        self._schedule_album_invalidation(
+            album_uuid=updated_album.album_uuid,
+            event_uuid=updated_album.event.event_uuid,
+        )
+
+        return updated_album
+
+    @transaction.atomic
+    def delete_album(self, album_uuid, user_id):
+        """Delete album; S3 cleanup runs in Celery after commit."""
+        album = self.dal.get_by_uuid_with_relations(album_uuid)
+
+        if not self.permission_service.is_event_owner(album.event, user_id):
+            logger.warning(f'User {user_id} attempted to delete album {album_uuid} without ownership')
+            raise AlbumPermissionError(action='delete', album_id=str(album_uuid))
+
+        s3_prefix = album.album_s3_prefix
+        album_uuid_str = str(album.album_uuid)
+        event_uuid_str = str(album.event.event_uuid)
+
+        self.dal.delete(album)
+        logger.info(f'Album {album_uuid} deleted by user {user_id}; S3 cleanup scheduled')
+
+        transaction.on_commit(
+            lambda: cleanup_album_s3_prefix_task.delay(s3_prefix, album_uuid_str),
+        )
+        self._schedule_album_invalidation(
+            album_uuid=album_uuid_str,
+            event_uuid=event_uuid_str,
+        )
+
+    def _schedule_album_invalidation(self, album_uuid, event_uuid) -> None:
+        """Register post-commit cache invalidation so readers don't see stale album data."""
+        album_uuid_str = str(album_uuid)
+        event_uuid_str = str(event_uuid)
+
+        def _invalidate() -> None:
+            try:
+                self.cache_service.invalidate_album(album_uuid_str)
+                self.cache_service.invalidate_event_albums(event_uuid_str)
+            except Exception as exc:
+                logger.warning(
+                    'Album cache invalidation failed for album %s event %s: %s',
+                    album_uuid_str,
+                    event_uuid_str,
+                    exc,
+                )
+
+        transaction.on_commit(_invalidate)
+
+    def _can_view_album(self, album, user_id) -> bool:
+        """Whether a user may view an album.
+
+        album.is_public is the authoritative public-access gate: a private album is
+        NOT exposed just because its event is public, and event participants (any
+        role) always see every album of their event.
+        """
+        return album.is_public or self.permission_service.is_user_participant(album.event, user_id)

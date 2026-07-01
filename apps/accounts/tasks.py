@@ -1,89 +1,69 @@
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 
 from settings.celery import app
 
 logger = logging.getLogger(__name__)
 
 
-@app.task(bind=True)
-def send_verification_code_email_task(self, email: str, code: str):
+@app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={'max_retries': 3, 'countdown': 60},
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def send_verification_code_task(self, email: str, code: str, expiry_minutes: int = 10):
     """
-    Send verification code via email.
-
+    Send verification code email with HTML template
+    
     Args:
         email: Recipient email address
         code: 6-digit verification code
-
-    Returns:
-        dict with success status
+        expiry_minutes: Code expiration time in minutes
     """
     try:
-        subject = 'Your MediaFlow verification code'
-        message = f"""Your verification code: {code}
+        logger.info(f'Sending verification code email to {email}')
 
-This code expires in 10 minutes.
-If you didn't request this code, please ignore this email.
-
--- MediaFlow Team"""
-
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@mediaflow.com'),
-            recipient_list=[email],
-            fail_silently=False,
-        )
-
-        logger.info(f'Verification code email sent successfully to: {email}')
-
-        return {'status': 'success', 'email': email, 'message': 'Verification code email sent'}
-
-    except Exception as e:
-        logger.exception(f'Failed to send verification code email to {email}: {e}')
-
-        # Retry with exponential backoff
-        raise self.retry(
-            countdown=60,  # Wait 1 minute before retry
-            max_retries=3,
-            exc=e,
-        )
-
-
-@app.task
-def cleanup_expired_passwordless_codes_task():
-    """
-    Cleanup expired passwordless codes from Redis.
-
-    This task is optional since Redis TTL automatically expires keys,
-    but can be used for monitoring and statistics.
-
-    Returns:
-        dict with cleanup statistics
-    """
-    try:
-        from django_redis import get_redis_connection
-
-        redis_client = get_redis_connection('default')
-
-        # Get all passwordless code keys
-        pattern = 'passwordless_code:*'
-        keys = redis_client.keys(pattern)
-
-        expired_count = 0
-        active_count = len(keys)
-
-        logger.info(f'Found {active_count} active passwordless codes in Redis')
-
-        return {
-            'status': 'success',
-            'active_codes': active_count,
-            'expired_codes': expired_count,  # Redis TTL handles expiry automatically
-            'message': 'Cleanup completed',
+        context = {
+            'code': code,
+            'email': email,
+            'expiry_minutes': expiry_minutes,
+            'app_name': 'MediaFlow',
+            'site_url': getattr(settings, 'SITE_URL', 'https://mediaflow.com'),
         }
 
+        html_content = render_to_string('emails/verification_code.html', context)
+        text_content = render_to_string('emails/verification_code.txt', context)
+
+        subject = f'{getattr(settings, "EMAIL_SUBJECT_PREFIX", "[MediaFlow]")} Код входу'
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@mediaflow.com')
+
+        email_message = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=from_email,
+            to=[email],
+        )
+
+        email_message.attach_alternative(html_content, "text/html")
+
+        result = email_message.send()
+        
+        if result == 1:
+            logger.info(f'Verification code email sent successfully to {email}')
+            return {'success': True, 'email': email, 'message': 'Email sent successfully'}
+        else:
+            logger.error(f'Failed to send verification code email to {email}')
+            raise Exception(f'Email send failed for {email}')
+            
     except Exception as e:
-        logger.exception(f'Failed to cleanup passwordless codes: {e}')
-        return {'status': 'error', 'message': str(e)}
+        logger.exception(f'Error sending verification code email to {email}: {e}')
+
+        if self.request.retries >= self.max_retries:
+            logger.error(f'Final retry failed for verification code email to {email}')
+            
+        raise  # Re-raise to trigger Celery retry mechanism

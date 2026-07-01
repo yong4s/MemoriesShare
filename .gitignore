@@ -69,6 +69,12 @@ secrets.json
 # JIRA plugin
 atlassian-ide-plugin.xml
 
+# Node / frontend build
+node_modules/
+.pnpm-store/
+webpack-stats.json
+frontend/webpack_bundles/
+
 # Media Flow specific
 media/uploads/
 staticfiles/
@@ -127,6 +133,4 @@ start-token-server.py
 install_packages.sh
 
 # Frontend files
-frontend/
 /docs/
-/apps/shared/templates/

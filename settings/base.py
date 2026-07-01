@@ -18,11 +18,9 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
-    # set casting, default value
     DEBUG=(bool, False),
 )
-# reading .env file
-ENV_FILE_PATH = BASE_DIR / '.env.sample'
+ENV_FILE_PATH = BASE_DIR / '.env'
 
 if ENV_FILE_PATH.exists():
     environ.Env.read_env(str(ENV_FILE_PATH))
@@ -31,14 +29,13 @@ if ENV_FILE_PATH.exists():
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY', default='ek12k!Kkwk1e2kdkskqkNDNhw278AB@)3nas')
+SECRET_KEY = env.str('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
-DJANGO_ADMINS = ''
 ADMINS = [x.split(':') for x in env.list('DJANGO_ADMINS', default=[])]
 
 # Application definition
@@ -70,25 +67,13 @@ TEMPLATES = [
     },
 ]
 
-# WSGI_APPLICATION = 'apps.wsgi.application'
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 # Database
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
 
-# DATABASES = {
-#     'default': env.db('DATABASE_URL'),
-# }
-
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'HOST': 'db',  # PostgreSQL service name in docker-compose
-        'PORT': '5432',
-    }
+    'default': env.db('DATABASE_URL'),
 }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -135,3 +120,4 @@ MEDIA_URL = '/media/'
 # Frontend Configuration
 # Frontend URL for generating links in invitations and QR codes
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+EVENT_INVITE_JOIN_PATH = env('EVENT_INVITE_JOIN_PATH', default='/join')

@@ -1,55 +1,11 @@
-from django.core.validators import FileExtensionValidator
 from rest_framework import serializers
 
 from apps.albums.models import Album
-from apps.albums.models import Download
-from apps.mediafiles.models import MediaFile
-
-
-class MediaFileSerializer(serializers.ModelSerializer):
-    file = serializers.FileField(
-        write_only=True,
-        validators=[
-            FileExtensionValidator(
-                allowed_extensions=[
-                    'jpg',
-                    'png',
-                    'jpeg',
-                    'pdf',
-                    'gif',
-                    'mp3',
-                    'mp4',
-                    'mov',
-                ]
-            )
-        ],
-    )
-    album_id = serializers.PrimaryKeyRelatedField(source='album_id', queryset=Album.objects.all())
-    user_id = serializers.PrimaryKeyRelatedField(source='user_id', read_only=True)
-
-    class Meta:
-        model = MediaFile
-        fields = (
-            'mediafilePK',
-            'album_id',
-            'user_id',
-            'file',
-            'file_type',
-            'S3_bucket_name',
-            'S3_object_key',
-        )
-        read_only_fields = (
-            'mediafilePK',
-            'file_type',
-            'S3_bucket_name',
-            'S3_object_key',
-            'user_id',
-        )
 
 
 class AlbumListSerializer(serializers.ModelSerializer):
-    mediafiles_count = serializers.SerializerMethodField()
     event_name = serializers.CharField(source='event.event_name', read_only=True)
+    file_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Album
@@ -60,12 +16,9 @@ class AlbumListSerializer(serializers.ModelSerializer):
             'description',
             'is_public',
             'created_at',
-            'mediafiles_count',
+            'file_count',
         )
-        read_only_fields = ('album_uuid', 'event_name', 'created_at')
-
-    def get_mediafiles_count(self, obj):
-        return obj.mediafiles.count()
+        read_only_fields = ('album_uuid', 'event_name', 'created_at', 'file_count')
 
 
 class AlbumDetailSerializer(serializers.ModelSerializer):
@@ -102,7 +55,7 @@ class AlbumDetailSerializer(serializers.ModelSerializer):
 
 
 class AlbumCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating album - without extra fields"""
+    """Serializer for creating album"""
 
     class Meta:
         model = Album
@@ -121,37 +74,15 @@ class AlbumCreateSerializer(serializers.ModelSerializer):
         return value.strip() if value else ''
 
 
-class DownloadSerializer(serializers.ModelSerializer):
-    album_name = serializers.CharField(source='album.name', read_only=True)
-    album_uuid = serializers.UUIDField(source='album.album_uuid', read_only=True)
-    time_remaining = serializers.SerializerMethodField()
+class AlbumUpdateSerializer(serializers.Serializer):
+    """Serializer for updating album — all fields optional"""
 
-    class Meta:
-        model = Download
-        fields = (
-            'download_uuid',
-            'album_name',
-            'album_uuid',
-            'status',
-            'download_url',
-            'expires_at',
-            'file_count',
-            'archive_size',
-            'time_remaining',
-            'created_at',
-        )
-        read_only_fields = (
-            'download_uuid',
-            'album_name',
-            'album_uuid',
-            'status',
-            'download_url',
-            'expires_at',
-            'time_remaining',
-            'created_at',
-        )
+    name = serializers.CharField(max_length=255, required=False)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    is_public = serializers.BooleanField(required=False)
 
-    def get_time_remaining(self, obj):
-        """Return time remaining until expiration in seconds"""
-        remaining = obj.time_remaining
-        return remaining.total_seconds() if remaining else None
+    def validate_name(self, value):
+        if value and len(value.strip()) < 2:
+            msg = 'Album name must be at least 2 characters'
+            raise serializers.ValidationError(msg)
+        return value.strip() if value else value

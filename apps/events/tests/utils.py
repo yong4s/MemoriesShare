@@ -1,23 +1,19 @@
-"""
-Утилітні функції для тестування events додатку.
-"""
-
-import json
 from unittest.mock import Mock
 from unittest.mock import patch
 
+from django.db import connection
+from django.test.utils import override_settings
 from rest_framework_api_key.models import APIKey
 
 from apps.accounts.tests.factories import UserFactory
 from apps.events.tests.factories import EventFactory
-from apps.events.tests.factories import GuestFactory
+from apps.events.tests.factories import EventParticipantFactory
 
 
 class EventTestMixin:
-    """Mixin для спрощення тестування подій"""
+    """Common setup for event tests: two users, two events, owner-attached event."""
 
     def setUp(self):
-        """Базова настройка для тестів подій"""
         super().setUp()
         self.user = UserFactory()
         self.other_user = UserFactory()
@@ -25,53 +21,27 @@ class EventTestMixin:
         self.other_event = EventFactory()
 
     def create_api_key(self):
-        """Створює API ключ для тестування"""
         api_key, key = APIKey.objects.create_key(name='test-api-key')
         return api_key, key
 
     def setup_api_authentication(self):
-        """Налаштовує API автентифікацію для клієнта"""
         if hasattr(self, 'client'):
             api_key, key = self.create_api_key()
             self.client.credentials(HTTP_X_API_KEY=key)
             return api_key, key
         return None, None
 
-    def create_guest_for_event(self, event=None, **kwargs):
-        """Створює гостя для події"""
-        if event is None:
-            event = self.event
-
-        defaults = {
-            'event': event,
-            'name': 'Test Guest',
-            'email': 'guest@example.com',
-            'rsvp_status': 'pending',
-        }
-        defaults.update(kwargs)
-
-        return GuestFactory(**defaults)
-
-    def create_multiple_guests(self, event=None, count=3, **kwargs):
-        """Створює кілька гостей для події"""
-        if event is None:
-            event = self.event
-
-        guests = []
-        for i in range(count):
-            guest_kwargs = kwargs.copy()
-            if 'email' not in guest_kwargs:
-                guest_kwargs['email'] = f'guest{i + 1}@example.com'
-            if 'name' not in guest_kwargs:
-                guest_kwargs['name'] = f'Guest {i + 1}'
-
-            guests.append(self.create_guest_for_event(event, **guest_kwargs))
-
-        return guests
+    def add_participant(self, event=None, user=None, **kwargs):
+        """Create an EventParticipant on the test event by default."""
+        return EventParticipantFactory(
+            event=event or self.event,
+            user=user or UserFactory(),
+            **kwargs,
+        )
 
 
 def mock_s3_service(**kwargs):
-    """Створює мок для S3Service з налаштуваннями за замовчуванням"""
+    """Create a mock S3Service with default settings."""
     defaults = {
         'folder_exists.return_value': False,
         'create_folder.return_value': True,
@@ -104,7 +74,7 @@ def mock_s3_service(**kwargs):
 
 
 def patch_s3_service(**kwargs):
-    """Decorator для патчингу S3Service"""
+    """Decorator for patching S3Service."""
 
     def decorator(test_func):
         return patch('apps.events.services.S3Service', return_value=mock_s3_service(**kwargs))(test_func)
@@ -113,7 +83,7 @@ def patch_s3_service(**kwargs):
 
 
 def create_test_s3_key(user_id, event_uuid, album_uuid=None, file_uuid=None):
-    """Створює тестовий S3 ключ за шаблоном проєкту"""
+    """Create a test S3 key following the project template."""
     album_uuid = album_uuid or 'test-album-uuid'
     file_uuid = file_uuid or 'test-file-uuid'
 
@@ -121,10 +91,7 @@ def create_test_s3_key(user_id, event_uuid, album_uuid=None, file_uuid=None):
 
 
 def assert_no_database_queries(test_case, func, *args, **kwargs):
-    """Перевіряє, що функція не виконує запити до БД"""
-    from django.db import connection
-    from django.test.utils import override_settings
-
+    """Assert that callable issues zero DB queries."""
     with override_settings(DEBUG=True):
         initial_queries = len(connection.queries)
         func(*args, **kwargs)
@@ -138,10 +105,7 @@ def assert_no_database_queries(test_case, func, *args, **kwargs):
 
 
 def assert_max_database_queries(test_case, max_queries, func, *args, **kwargs):
-    """Перевіряє, що функція виконує не більше заданої кількості запитів до БД"""
-    from django.db import connection
-    from django.test.utils import override_settings
-
+    """Assert that callable issues at most ``max_queries`` DB queries."""
     with override_settings(DEBUG=True):
         initial_queries = len(connection.queries)
         result = func(*args, **kwargs)

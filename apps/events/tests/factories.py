@@ -1,88 +1,87 @@
+import random
+import uuid
 from datetime import date
 from datetime import timedelta
 
 import factory
+from django.utils import timezone
 
-from apps.accounts.models import Guest
 from apps.accounts.tests.factories import UserFactory
 from apps.events.models import Event
+from apps.events.models.event_participant import EventParticipant
+from apps.events.models.invite_link_event import InviteEventLink
 
 
 class EventFactory(factory.django.DjangoModelFactory):
-    """Factory для створення тестових подій"""
-
     class Meta:
         model = Event
 
     event_name = factory.Faker('sentence', nb_words=3)
-    event_uuid = factory.LazyFunction(lambda: __import__('uuid').uuid4())
+    event_uuid = factory.LazyFunction(uuid.uuid4)
     description = factory.Faker('paragraph', nb_sentences=5)
     date = factory.LazyFunction(lambda: date.today() + timedelta(days=7))
     is_public = False
 
+    @factory.post_generation
+    def with_owner(self, create, extracted, **kwargs):
+        """Optionally attach an OWNER participant.
+
+        Usage:
+            EventFactory(with_owner=user)             # uses given user
+            EventFactory(with_owner=True)             # creates a new UserFactory
+            EventFactory()                            # no owner participant
+        """
+        if not create or not extracted:
+            return
+
+        owner = UserFactory() if extracted is True else extracted
+        EventParticipantFactory(event=self, user=owner, as_owner=True)
+
 
 class FutureEventFactory(EventFactory):
-    """Factory для створення майбутніх подій"""
-
-    date = factory.LazyFunction(
-        lambda: date.today() + timedelta(days=factory.Faker('pyint', min_value=1, max_value=365).generate())
-    )
+    date = factory.LazyFunction(lambda: date.today() + timedelta(days=random.randint(1, 365)))
 
 
 class PastEventFactory(EventFactory):
-    """Factory для створення минулих подій"""
-
-    date = factory.LazyFunction(
-        lambda: date.today() - timedelta(days=factory.Faker('pyint', min_value=1, max_value=365).generate())
-    )
+    date = factory.LazyFunction(lambda: date.today() - timedelta(days=random.randint(1, 365)))
 
 
-class LimitedEventFactory(EventFactory):
-    """Factory для створення подій (max_guests field removed)"""
-
-
-class GuestFactory(factory.django.DjangoModelFactory):
-    """Factory для створення тестових гостей"""
-
+class EventParticipantFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = Guest
+        model = EventParticipant
 
     event = factory.SubFactory(EventFactory)
-    name = factory.Faker('name')
-    email = factory.Faker('email')
-    phone_number = factory.LazyFunction(
-        lambda: f'+380{factory.Faker('random_int', min=500000000, max=999999999).generate()}'
-    )
-    dietary_preferences = factory.Faker('sentence', nb_words=3)
-    rsvp_status = 'pending'
+    user = factory.SubFactory(UserFactory)
+    role = EventParticipant.Role.GUEST
+    rsvp_status = EventParticipant.RsvpStatus.PENDING
+
+    class Params:
+        as_owner = factory.Trait(
+            role=EventParticipant.Role.OWNER,
+            rsvp_status=EventParticipant.RsvpStatus.ACCEPTED,
+        )
+        as_moderator = factory.Trait(role=EventParticipant.Role.MODERATOR)
+        as_guest = factory.Trait(role=EventParticipant.Role.GUEST)
+        as_attending = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.ACCEPTED)
+        as_declined = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.DECLINED)
+        as_pending = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.PENDING)
+        as_tentative = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.TENTATIVE)
+        as_maybe = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.MAYBE)
+        as_canceled = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.CANCELED)
+        as_confirmed_plus_one = factory.Trait(rsvp_status=EventParticipant.RsvpStatus.CONFIRMED_PLUS_ONE)
 
 
-class AcceptedGuestFactory(GuestFactory):
-    """Factory для створення підтверджених гостей"""
+class InviteEventLinkFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = InviteEventLink
 
-    rsvp_status = 'accepted'
+    event = factory.SubFactory(EventFactory)
+    invite_token = factory.LazyFunction(uuid.uuid4)
+    max_uses = 50
+    used_count = 0
+    expires_at = factory.LazyFunction(lambda: timezone.now() + timedelta(days=7))
 
-
-class DeclinedGuestFactory(GuestFactory):
-    """Factory для створення відмовлених гостей"""
-
-    rsvp_status = 'declined'
-
-
-class PendingGuestFactory(GuestFactory):
-    """Factory для створення очікуючих гостей"""
-
-    rsvp_status = 'pending'
-
-
-class RespondedGuestFactory(GuestFactory):
-    """Factory для створення гостей що відповіли"""
-
-    rsvp_status = 'accepted'
-    responded_at = factory.Faker('date_time_this_year')
-
-
-class InvitedGuestFactory(GuestFactory):
-    """Factory для створення запрошених гостей"""
-
-    invitation_sent_at = factory.Faker('date_time_this_year')
+    class Params:
+        expired = factory.Trait(expires_at=factory.LazyFunction(lambda: timezone.now() - timedelta(hours=1)))
+        exhausted = factory.Trait(used_count=factory.LazyAttribute(lambda obj: obj.max_uses))
+        revoked = factory.Trait(expires_at=factory.LazyFunction(timezone.now))

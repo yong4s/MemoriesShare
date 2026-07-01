@@ -1,103 +1,72 @@
 import logging
+from functools import cached_property
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.events.permissions import EventPermissionMixin
-from apps.events.permissions import IsEventOwnerOrModerator
-from apps.events.serializers import BulkGuestInviteSerializer
-from apps.events.serializers import EventParticipantDetailSerializer
-from apps.events.serializers import EventParticipantListSerializer
-from apps.events.serializers import GuestInviteSerializer
-from apps.events.views.event_views import BaseEventAPIView
+from apps.events.serializers import EventPublicInviteIssueResponseSerializer
+from apps.events.serializers import EventPublicInviteIssueSerializer
+from apps.events.serializers import EventPublicInviteJoinResponseSerializer
+from apps.events.serializers import EventPublicInviteJoinSerializer
+from apps.events.views.base import BaseEventAPIView
+from apps.shared.container import get_container
 
 logger = logging.getLogger(__name__)
 
 
 @extend_schema(tags=['Event Invitations'])
-class EventGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
-    """Invite guest to event"""
+class EventPublicInviteLinkAPIView(BaseEventAPIView):
+    """Issue shared invite URL for frontend-side QR rendering."""
 
-    permission_classes = [IsAuthenticated, IsEventOwnerOrModerator]
+    permission_classes = [IsAuthenticated]
+
+    @cached_property
+    def invite_link_service(self):
+        return get_container().invite_link_service()
 
     def post(self, request, event_uuid):
-        """Invite a guest user to the event"""
-        serializer = GuestInviteSerializer(data=request.data)
+        serializer = EventPublicInviteIssueSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
 
-        guest_user, participation = self.get_event_service().invite_guest_to_event(
-            event_uuid=event_uuid,
-            guest_name=serializer.validated_data['guest_name'],
-            guest_email=serializer.validated_data.get('guest_email', ''),
-            requesting_user_id=request.user.id,
-            user_service=self.get_user_service(),
+        result = self.invite_link_service.issue_public_invite_link(
+            event_uuid=str(event_uuid),
+            requested_by_user_id=request.user.id,
+            ttl_hours=serializer.validated_data['ttl_hours'],
+            max_uses=serializer.validated_data['max_uses'],
         )
 
-        response_serializer = EventParticipantDetailSerializer(participation)
+        response_serializer = EventPublicInviteIssueResponseSerializer(result)
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
 
-        logger.info(f'Invited guest {guest_user.guest_name} to event {event_uuid}')
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+    def delete(self, request, event_uuid):
+        """Revoke the active public invite link — rotates token + forces expiry."""
+        self.invite_link_service.revoke_public_invite_link(
+            event_uuid=str(event_uuid),
+            requested_by_user_id=request.user.id,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=['Event Invitations'])
-class EventBulkGuestInviteAPIView(BaseEventAPIView, EventPermissionMixin):
-    """Invite multiple guests to event"""
+class EventPublicInviteJoinAPIView(BaseEventAPIView):
+    """Consume signed invite token and join event as authenticated user."""
 
-    permission_classes = [IsAuthenticated, IsEventOwnerOrModerator]
+    permission_classes = [IsAuthenticated]
 
-    def post(self, request, event_uuid):
-        """Invite multiple guests to the event"""
-        serializer = BulkGuestInviteSerializer(data=request.data)
+    @cached_property
+    def invite_link_service(self):
+        return get_container().invite_link_service()
+
+    def post(self, request):
+        serializer = EventPublicInviteJoinSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        invited_participants = []
-        failed_invitations = []
-
-        for guest_data in serializer.validated_data['guests']:
-            try:
-                (
-                    _guest_user,
-                    participation,
-                ) = self.get_event_service().invite_guest_to_event(
-                    event_uuid=event_uuid,
-                    guest_name=guest_data['guest_name'],
-                    guest_email=guest_data.get('guest_email', ''),
-                    requesting_user_id=request.user.id,
-                    user_service=self.get_user_service(),
-                )
-
-                invited_participants.append(participation)
-                logger.debug(f'Successfully invited guest {guest_data['guest_name']} to event {event_uuid}')
-
-            except Exception as e:
-                failed_invitations.append({
-                    'guest_name': guest_data['guest_name'],
-                    'error_type': getattr(e, 'error_code', type(e).__name__),
-                    'error': str(e),
-                })
-                logger.warning(f'Guest invitation failed for {guest_data['guest_name']}: {e}')
-
-        success_serializer = EventParticipantListSerializer(invited_participants, many=True)
-
-        response_data = {
-            'invited_participants': success_serializer.data,
-            'successful_count': len(invited_participants),
-            'failed_count': len(failed_invitations),
-            'failed_invitations': failed_invitations,
-        }
-
-        if len(invited_participants) > 0 and len(failed_invitations) == 0:
-            status_code = status.HTTP_201_CREATED
-            logger.info(f'Bulk invited all {len(invited_participants)} guests to event {event_uuid}')
-        elif len(invited_participants) > 0:
-            status_code = status.HTTP_207_MULTI_STATUS
-            logger.info(
-                f'Bulk invited {len(invited_participants)}/{len(invited_participants) + len(failed_invitations)} guests to event {event_uuid}'
-            )
-        else:
-            status_code = status.HTTP_400_BAD_REQUEST
-            logger.warning(f'Failed to invite any guests to event {event_uuid}')
-
-        return Response(response_data, status=status_code)
+        result = self.invite_link_service.consume_public_invite_link(
+            signed_token=serializer.validated_data['invite_token'],
+            authenticated_user_id=request.user.id,
+        )
+        response_serializer = EventPublicInviteJoinResponseSerializer(result)
+        status_code = status.HTTP_200_OK if result.get('already_joined') else status.HTTP_201_CREATED
+        return Response(response_serializer.data, status=status_code)

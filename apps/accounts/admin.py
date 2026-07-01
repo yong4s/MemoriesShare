@@ -10,7 +10,6 @@ from apps.accounts.models import CustomUser
 class CustomUserAdmin(BaseUserAdmin):
     """Custom User Admin for unified user types"""
 
-    # Display fields in user list
     list_display = (
         'pk',
         'email',
@@ -30,7 +29,6 @@ class CustomUserAdmin(BaseUserAdmin):
     search_fields = ('email', 'guest_name', 'first_name', 'last_name', 'pk')
     ordering = ('-date_joined',)
 
-    # Fields for user detail view
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('User Type'), {'fields': ('is_registered', 'guest_name')}),
@@ -58,7 +56,6 @@ class CustomUserAdmin(BaseUserAdmin):
         ),
     )
 
-    # Fields for creating new user
     add_fieldsets = (
         (
             None,
@@ -77,7 +74,6 @@ class CustomUserAdmin(BaseUserAdmin):
         ),
     )
 
-    # Readonly fields
     readonly_fields = (
         'date_joined',
         'last_login',
@@ -111,14 +107,12 @@ class CustomUserAdmin(BaseUserAdmin):
             moderator_count = participations.filter(role='MODERATOR').count()
             guest_count = participations.filter(role='GUEST').count()
 
-            # RSVP statistics
             accepted = participations.filter(rsvp_status='accepted').count()
             declined = participations.filter(rsvp_status='declined').count()
             pending = participations.filter(rsvp_status='pending').count()
 
             summary = [f'📊 <strong>Всього подій: {total}</strong>']
 
-            # Role breakdown
             roles = []
             if owner_count:
                 roles.append(f'👑 Власник: {owner_count}')
@@ -129,7 +123,6 @@ class CustomUserAdmin(BaseUserAdmin):
             if roles:
                 summary.append('<br>'.join(roles))
 
-            # RSVP breakdown
             rsvp_info = []
             if accepted:
                 rsvp_info.append(f'<span style="color: green;">✅ Підтвердив: {accepted}</span>')
@@ -140,7 +133,6 @@ class CustomUserAdmin(BaseUserAdmin):
             if rsvp_info:
                 summary.append('<br>' + ' | '.join(rsvp_info))
 
-            # Recent events
             recent_events = participations.order_by('-created_at')[:3]
             if recent_events:
                 events_info = []

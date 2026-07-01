@@ -15,6 +15,10 @@ from apps.shared.base.models import BaseModel
 class CustomUser(AbstractUser, BaseModel):
     """Unified User Model for both Guests and Registered Users"""
 
+    class LoginMethod(models.TextChoices):
+        PASSWORD = 'password', _('Password')
+        PASSWORDLESS = 'passwordless', _('Passwordless')
+
     username = None
     first_name = models.CharField(_('first name'), max_length=150, blank=True)
     last_name = models.CharField(_('last name'), max_length=150, blank=True)
@@ -33,6 +37,22 @@ class CustomUser(AbstractUser, BaseModel):
         default=False,
         db_index=True,  # Performance: frequent filtering
         help_text=_('True for registered users, False for guests'),
+    )
+
+    preferred_login_method = models.CharField(
+        _('Preferred Login Method'),
+        max_length=16,
+        choices=LoginMethod.choices,
+        default=LoginMethod.PASSWORDLESS,
+        db_index=True,
+        help_text=_('User-selected preferred sign-in method (hint for the client UI)'),
+    )
+
+    password_changed_at = models.DateTimeField(
+        _('Password Changed At'),
+        null=True,
+        blank=True,
+        help_text=_('Timestamp of the last successful password set or change'),
     )
 
     # UUID for S3 structure and external references
@@ -75,7 +95,6 @@ class CustomUser(AbstractUser, BaseModel):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS: ClassVar[list[str]] = []
 
-    # Set the custom manager
     objects = CustomUserManager()
 
     class Meta:
@@ -101,6 +120,10 @@ class CustomUser(AbstractUser, BaseModel):
         super().clean()
         errors = {}
 
+        # Soft-disable anonymous guests: legacy rows may exist, but new rows require email.
+        if self._state.adding and not self.email:
+            errors['email'] = _('Email is required for new users')
+
         # All users with email must have unique email
         if self.email:
             existing_user = CustomUser.objects.filter(email=self.email).exclude(pk=self.pk).first()
@@ -121,7 +144,7 @@ class CustomUser(AbstractUser, BaseModel):
             # is_registered=False: Passwordless users OR guests
             if self.email and self.has_usable_password():
                 errors['password'] = _('Passwordless users cannot have passwords')
-            # If no email, must be guest with guest_name
+            # Legacy safety: old anonymous rows may still exist and require a name.
             if not self.email and not self.guest_name:
                 errors['guest_name'] = _('Guest users must have a display name')
 
@@ -145,9 +168,6 @@ class CustomUser(AbstractUser, BaseModel):
         # Ensure guests don't have passwords
         if not self.is_registered and self.has_usable_password():
             self.set_unusable_password()
-
-        # Validate before saving
-        self.clean()
 
         super().save(*args, **kwargs)
 
@@ -218,22 +238,6 @@ class CustomUser(AbstractUser, BaseModel):
 
         self.save()
         return self
-
-    def get_event_participations(self):
-        """Get all event participations for this user"""
-        return self.event_participations.select_related('event').all()
-
-    def get_owned_events(self):
-        """Get events where this user is the owner"""
-        from apps.events.models import EventParticipant
-
-        return self.joined_events.filter(eventparticipant__role=EventParticipant.Role.OWNER)
-
-    def get_guest_events(self):
-        """Get events where this user is a guest"""
-        from apps.events.models import EventParticipant
-
-        return self.joined_events.filter(eventparticipant__role=EventParticipant.Role.GUEST)
 
     def __str__(self):
         return self.display_name

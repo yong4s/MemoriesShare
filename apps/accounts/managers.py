@@ -6,31 +6,20 @@ class CustomUserManager(BaseUserManager):
     """Custom manager for CustomUser model"""
 
     def create_user(self, email=None, password=None, **extra_fields):
-        """Create and return regular user"""
-        # Handle guest users (no email, no password)
+        """Create and return a user. Email is required."""
         if not email:
-            if not extra_fields.get('guest_name'):
-                msg = 'Guest users must have a guest_name'
-                raise ValidationError(msg)
-            extra_fields.setdefault('is_registered', False)
-            extra_fields.setdefault('is_active', True)
-
-            user = self.model(email=None, **extra_fields)
-            user.set_unusable_password()
-            user.save(using=self._db)
-            return user
-
-        # Handle registered users (email + password required)
-        if not email:
-            msg = 'Email is required for registered users'
+            msg = 'Email is required for all users'
             raise ValidationError(msg)
 
         email = self.normalize_email(email)
-        extra_fields.setdefault('is_registered', True)
+        extra_fields.setdefault('is_registered', bool(password))
         extra_fields.setdefault('is_active', True)
 
         user = self.model(email=email, **extra_fields)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 
@@ -48,11 +37,3 @@ class CustomUserManager(BaseUserManager):
             raise ValueError(msg)
 
         return self.create_user(email, password, **extra_fields)
-
-    def get_registered_users(self):
-        """Get queryset of registered users only"""
-        return self.filter(is_registered=True)
-
-    def get_guest_users(self):
-        """Get queryset of guest users only"""
-        return self.filter(is_registered=False)

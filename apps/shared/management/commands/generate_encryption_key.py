@@ -1,11 +1,10 @@
-# apps/shared/management/commands/generate_encryption_key.py
 from cryptography.fernet import Fernet
 from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
     """
-    Django management command для генерації encryption key.
+    Django management command to generate an encryption key.
 
     Usage: python manage.py generate_encryption_key
     """

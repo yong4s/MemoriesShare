@@ -20,6 +20,7 @@ from typing import Dict
 from typing import Optional
 
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404
 from rest_framework import status
 from rest_framework.exceptions import APIException
@@ -38,8 +39,23 @@ from apps.shared.exceptions import PermissionError
 from apps.shared.exceptions import ResourceNotFoundError
 from apps.shared.exceptions import ServiceUnavailableError
 from apps.shared.exceptions import ValidationError
+from apps.shared.exceptions.exception import S3BucketNotFoundError
+from apps.shared.exceptions.exception import S3BucketPermissionError
+from apps.shared.exceptions.exception import S3ServiceError
+from apps.shared.exceptions.exception import S3UploadException
 
 logger = logging.getLogger(__name__)
+
+
+# Infrastructure exceptions whose verbose detail (S3 keys, bucket names, raw
+# boto errors) must never reach the client. The detail is logged server-side;
+# the client gets the generic ``default_detail``.
+_SCRUBBED_DETAIL_EXCEPTIONS = (
+    S3ServiceError,
+    S3UploadException,
+    S3BucketNotFoundError,
+    S3BucketPermissionError,
+)
 
 
 def custom_exception_handler(exc, context):
@@ -99,6 +115,9 @@ def custom_exception_handler(exc, context):
 
     if isinstance(exc, Http404):
         return _handle_django_404(exc, request_info)
+
+    if isinstance(exc, DjangoValidationError):
+        return _handle_django_validation_error(exc, request_info)
 
     # Unhandled exception - this is a 500 error
     return _handle_unhandled_exception(exc, request_info)
@@ -262,6 +281,23 @@ def _handle_django_404(exc, request_info: dict) -> Response:
     )
 
 
+def _handle_django_validation_error(exc, request_info: dict) -> Response:
+    """Handle Django's ValidationError (from validators / model.clean) → 400, not 500."""
+    logger.info(f'Django ValidationError caught in API handler: {request_info}')
+
+    response_data = {
+        'error': 'Validation Error',
+        'error_code': 'validation_error',
+        'message': '; '.join(exc.messages),
+        'timestamp': _get_timestamp(),
+    }
+    # ValidationError(dict) exposes field-keyed errors via message_dict
+    if hasattr(exc, 'error_dict'):
+        response_data['field_errors'] = exc.message_dict
+
+    return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+
 def _handle_unhandled_exception(exc, request_info: dict) -> Response:
     """Handle unexpected exceptions → 500"""
     # This is a critical error - log with full traceback
@@ -294,6 +330,9 @@ def _format_drf_response(response: Response, exc: Exception) -> Response:
     """Format DRF responses to match our consistent error format"""
     # DRF responses are already proper, but we can enhance them
     if hasattr(response, 'data') and isinstance(response.data, dict):
+        if isinstance(exc, _SCRUBBED_DETAIL_EXCEPTIONS):
+            # Verbose detail is already logged server-side; never return it.
+            response.data['detail'] = exc.default_detail
         response.data['timestamp'] = _get_timestamp()
         response.data['error_code'] = getattr(exc, 'default_code', type(exc).__name__)
 

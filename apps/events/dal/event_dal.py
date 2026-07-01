@@ -25,6 +25,34 @@ class EventDAL:
         """Get event with optimized queries"""
         return Event.objects.optimized().get(event_uuid=event_uuid)
 
+    @handle_db_errors(operation_type='read', model_name='Event')
+    def get_event_by_uuid_with_participants(self, event_uuid: str) -> Event:
+        """Get event with prefetched participants for permission checks"""
+        return Event.objects.prefetch_related('participants_through').get(event_uuid=event_uuid)
+
+    @handle_db_errors(operation_type='read', model_name='Event')
+    def get_event_by_uuid_optimized_with_participants(self, event_uuid: str) -> Event:
+        """Get a single event with participant statistics and prefetched participants.
+
+        with_statistics() supplies the count annotations the detail/analytics serializers
+        read (total_participants, attending_count, ...); optimized() prefetches
+        participants_through__user. Safe on a single-row .get() — no Cartesian blow-up.
+        """
+        return Event.objects.with_statistics().optimized().get(event_uuid=event_uuid)
+
+    @handle_db_errors(operation_type='read', model_name='Event')
+    def get_event_by_uuid_with_participants_for_update(self, event_uuid: str) -> Event:
+        """Locked event row with prefetched participants. Caller MUST be inside @transaction.atomic.
+
+        Used to serialize concurrent operations that need a stable view of the event
+        (e.g. issuing a public invite link — prevents two parallel issues from racing).
+        """
+        return (
+            Event.objects.select_for_update()
+            .prefetch_related('participants_through')
+            .get(event_uuid=event_uuid)
+        )
+
     def get_owned_events_queryset(self, user_id: int) -> QuerySet[Event]:
         """Get queryset of events where user is owner"""
         return Event.objects.for_owner(user_id)
@@ -32,6 +60,14 @@ class EventDAL:
     def get_user_events_queryset(self, user_id: int) -> QuerySet[Event]:
         """Get queryset of all events accessible to user"""
         return Event.objects.accessible_to_user(user_id)
+
+    def get_participating_events_queryset(self, user_id: int) -> QuerySet[Event]:
+        """Get queryset of events where user is participant but not owner"""
+        return Event.objects.participating_only(user_id)
+
+    def get_public_events_queryset(self) -> QuerySet[Event]:
+        """Get queryset of all public events"""
+        return Event.objects.public_events()
 
     @handle_db_errors(operation_type='update', model_name='Event')
     def update_event(self, event: Event, validated_data: dict[str, Any]) -> Event:

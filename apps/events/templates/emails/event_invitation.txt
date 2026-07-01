@@ -1,0 +1,24 @@
+{{ app_name|default:"MediaFlow" }} - You're invited to {{ event_name }}
+
+{% if recipient_name %}Hi {{ recipient_name }},{% else %}Hi there,{% endif %}
+
+{% if organizer_name %}{{ organizer_name }}{% else %}Someone{% endif %} invited you to an event on {{ app_name|default:"MediaFlow" }}.
+
+EVENT: {{ event_name }}
+WHEN:  {{ event_date_human }}{% if event_time_human %}, {{ event_time_human }}{% elif all_day %} (all day){% endif %}
+{% if location or address %}WHERE: {% if location %}{{ location }}{% endif %}{% if location and address %} — {% endif %}{% if address %}{{ address }}{% endif %}
+{% endif %}
+{% if description %}
+{{ description }}
+{% endif %}
+
+{% if event_url %}View the event:
+{{ event_url }}
+{% endif %}
+
+This invitation was sent to {{ recipient_email }}.
+Not expecting this? You can ignore this email — no action will be taken.
+
+---
+{{ app_name|default:"MediaFlow" }}
+{% if site_url %}{{ site_url }}{% endif %}

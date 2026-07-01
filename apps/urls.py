@@ -18,10 +18,12 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include
 from django.urls import path
+from django.urls import re_path
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularRedocView
 from drf_spectacular.views import SpectacularSwaggerView
 
+from apps.shared.views import FrontendAppView
 from settings import base
 
 urlpatterns = [
@@ -32,15 +34,19 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    # Core API Routes - CLEAN SEPARATION
-    path('api/events/', include('apps.events.urls')),  # Events CRUD
-    path('api/albums/', include('apps.albums.urls')),  # Albums CRUD
-    path('api/mediafiles/', include('apps.mediafiles.urls')),  # MediaFiles CRUD
-    path('api/accounts/', include('apps.accounts.urls')),  # User management + Guests
-    # Specialized Routes
-    # path('invites/', include('apps.accounts.invite_urls')),     # QR-код запрошення (TODO: Fix EventInvite)
-    # Authentication
+    # Core API Routes
+    path('api/events/', include('apps.events.urls')),
+    path('api/albums/', include('apps.albums.urls')),
+    path('api/mediafiles/', include('apps.mediafiles.urls')),
+    path('api/accounts/', include('apps.accounts.urls')),
     path('accounts/', include('allauth.urls')),  # Django AllAuth URLs
+    # SPA shell (must stay after API/admin routes)
+    path('', FrontendAppView.as_view(), name='frontend-root'),
+    re_path(
+        r'^(?!api/|admin/|swagger/|redoc/|api-auth/|accounts/|media/|static/).*$',
+        FrontendAppView.as_view(),
+        name='frontend-app',
+    ),
 ]
 
 if base.DEBUG:

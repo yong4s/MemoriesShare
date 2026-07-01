@@ -228,6 +228,13 @@ class EventParticipant(BaseModel):
             models.Index(fields=['rsvp_status']),
             models.Index(fields=['invite_token_used']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['event'],
+                condition=models.Q(role='OWNER'),
+                name='uniq_event_owner',
+            ),
+        ]
 
     def clean(self):
         super().clean()
@@ -247,7 +254,10 @@ class EventParticipant(BaseModel):
         if self.user and self.user.is_guest and not self.guest_name:
             self.guest_name = self.user.display_name
 
-        self.clean()
+        if self.user and self.user.is_registered:
+            self.guest_name = ''
+            self.guest_email = ''
+            self.guest_phone = ''
 
         super().save(*args, **kwargs)
 

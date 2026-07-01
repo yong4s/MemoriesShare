@@ -1,52 +1,46 @@
-from django.core.validators import FileExtensionValidator
 from rest_framework import serializers
 
-from apps.mediafiles.models import Download
-from apps.mediafiles.models import MediaFile
-from apps.shared.storage.s3_utils import file_generate_name
+
+class MediaFileUploadRequestSerializer(serializers.Serializer):
+    """POST /mediafiles/ — request presigned upload URL"""
+
+    event_uuid = serializers.UUIDField()
+    album_uuid = serializers.UUIDField()
+    file_name = serializers.CharField(max_length=500)
+    content_type = serializers.CharField(max_length=255)
 
 
-class MediaFileSerializer(serializers.ModelSerializer):
-    file = serializers.FileField(
-        write_only=True,
-        validators=[
-            FileExtensionValidator(
-                allowed_extensions=[
-                    'jpg',
-                    'png',
-                    'jpeg',
-                    'pdf',
-                    'gif',
-                    'mp3',
-                    'mp4',
-                    'mov',
-                ]
-            )
-        ],
-    )
+class MediaFileUploadResponseSerializer(serializers.Serializer):
+    """Response for presigned POST upload request"""
 
-    class Meta:
-        model = MediaFile
-        fields = (
-            'mediafilePK',
-            'album_id',
-            'user_id',
-            'file',
-            'file_type',
-            'S3_bucket_name',
-            'S3_object_key',
-        )
-        read_only_fields = (
-            'mediafilePK',
-            'file_type',
-            'S3_bucket_name',
-            'S3_object_key',
-            'user_id',
-            'album_id',
-        )
+    url = serializers.URLField()
+    fields = serializers.DictField(child=serializers.CharField())
+    s3_key = serializers.CharField()
+    file_uuid = serializers.CharField()
+    event_uuid = serializers.CharField()
+    album_uuid = serializers.CharField()
+    expires_in = serializers.IntegerField()
 
 
-class DownloadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Download
-        fields = '__all__'
+class MediaFileListQuerySerializer(serializers.Serializer):
+    """GET /mediafiles/ — query params validation"""
+
+    event_uuid = serializers.UUIDField(required=False)
+    album_uuid = serializers.UUIDField(required=False)
+
+
+class MediaFileUpdateSerializer(serializers.Serializer):
+    """PUT /mediafiles/{uuid}/ — update file metadata"""
+
+    file_name = serializers.CharField(max_length=500, required=False)
+
+
+class LegacyUploadedConfirmSerializer(serializers.Serializer):
+    """POST /mediafiles/files/uploaded/ — confirm upload"""
+
+    event_uuid = serializers.UUIDField()
+    s3_key = serializers.CharField(max_length=500)
+    file_type = serializers.CharField(max_length=255)
+    file_uuid = serializers.CharField(required=False)
+    album_uuid = serializers.UUIDField(required=False)
+    file_name = serializers.CharField(max_length=500, required=False)

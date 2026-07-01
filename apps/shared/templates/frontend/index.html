@@ -1,0 +1,35 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Media Flow</title>
+    <meta name="theme-color" content="#fbf6f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141018" media="(prefers-color-scheme: dark)" />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('mf-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = stored === 'light' || stored === 'dark'
+            ? stored
+            : (prefersDark ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="{% static 'webpack_bundles/main.css' %}" />
+  </head>
+  <body>
+    <div id="react-app"></div>
+    <script>
+      window.SENTRY_DSN = '';
+      window.COMMIT_SHA = 'local';
+      window.Urls = {};
+    </script>
+    <script src="{% static 'webpack_bundles/main.js' %}"></script>
+  </body>
+</html>

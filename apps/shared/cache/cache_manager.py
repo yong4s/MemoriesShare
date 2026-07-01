@@ -60,12 +60,12 @@ class CacheManager:
 
             success = self.cache.set(key, payload, timeout)
             if success:
-                self.logger.debug(...)
+                self.logger.debug(f'Cache SET: {key} (timeout: {timeout})')
             return bool(success)
 
-        except Exception:
+        except Exception as e:
             self._errors += 1
-            self.logger.exception('Cache SET error')
+            self.logger.exception(f'Cache SET error for key {key}: {e}')
             return False
 
     def delete(self, key: str) -> bool:
@@ -81,15 +81,12 @@ class CacheManager:
 
     def delete_pattern(self, pattern: str) -> int:
         try:
-            # Get Redis client for pattern operations
-            redis_client = self.cache._cache.get_client(1)
-            keys = redis_client.keys(pattern)
-
-            if keys:
-                deleted = redis_client.delete(*keys)
+            if hasattr(self.cache, 'delete_pattern'):
+                deleted = self.cache.delete_pattern(pattern)
                 self.logger.info(f'Cache DELETE_PATTERN: {pattern} (deleted: {deleted} keys)')
-                return deleted
-            self.logger.debug(f'Cache DELETE_PATTERN: {pattern} (no keys found)')
+                return deleted or 0
+
+            self.logger.warning(f'Pattern deletion not supported for current cache backend, pattern: {pattern}')
             return 0
 
         except Exception as e:
@@ -193,11 +190,6 @@ class CacheManager:
 
     def warm_event_cache(self, event_data: dict[str, Any], event_uuid: str) -> bool:
         try:
-            {
-                self.keys.event_detail(event_uuid): event_data,
-                self.keys.event_statistics(event_uuid): event_data.get('statistics', {}),
-            }
-
             # Different TTLs for different data types
             success = True
             success &= self.set(self.keys.event_detail(event_uuid), event_data, timeout=600)  # 10 min

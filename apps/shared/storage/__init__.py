@@ -1,8 +1,6 @@
 """
 Storage backends and utilities
 
-Import directly from submodules:
-- from .s3_utils import S3Service
-- from .base import AbstractStorageService
-- from .factory import StorageFactory
+Primary S3 service:
+- from apps.shared.storage.optimized_s3_service import OptimizedS3Service
 """

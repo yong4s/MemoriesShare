@@ -1,5 +1,5 @@
 """
-Валідатори для безпечної роботи з файлами та S3 ключами.
+Validators for safe handling of files and S3 keys.
 """
 
 import re
@@ -10,30 +10,29 @@ from django.utils.translation import gettext_lazy as _
 
 
 class S3KeyValidator:
-    """Валідатор для S3 ключів та безпечних шляхів"""
+    """Validator for S3 keys and safe paths."""
 
-    # Дозволені символи в назвах файлів та папок
+    # Characters allowed in file and folder names
     SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9\-_\.]+$')
     UUID_PATTERN = re.compile(r'^[a-f0-9\-]{36}$')
     ALBUM_UUID_PATTERN = re.compile(r'^[a-f0-9\-]{36}$')
 
-    # Максимальні довжини
     MAX_FILENAME_LENGTH = 255
     MAX_PATH_DEPTH = 10
 
     @classmethod
     def validate_album_name(cls, album_name: str) -> str:
         """
-        Валідація назви альбому (має бути UUID).
+        Validate the album name (must be a UUID).
 
         Args:
-            album_name: Назва альбому для валідації
+            album_name: Album name to validate
 
         Returns:
-            str: Валідована назва альбому
+            str: Validated album name
 
         Raises:
-            ValidationError: Якщо назва альбому невалідна
+            ValidationError: If the album name is invalid
         """
         if not album_name:
             raise ValidationError(_('Назва альбому не може бути порожньою'))
@@ -51,16 +50,16 @@ class S3KeyValidator:
     @classmethod
     def validate_file_uuid(cls, file_uuid: str) -> str:
         """
-        Валідація UUID файлу.
+        Validate a file UUID.
 
         Args:
-            file_uuid: UUID файлу для валідації
+            file_uuid: File UUID to validate
 
         Returns:
-            str: Валідований UUID файлу
+            str: Validated file UUID
 
         Raises:
-            ValidationError: Якщо UUID невалідний
+            ValidationError: If the UUID is invalid
         """
         if not file_uuid:
             raise ValidationError(_('UUID файлу не може бути порожнім'))
@@ -78,23 +77,22 @@ class S3KeyValidator:
     @classmethod
     def validate_s3_key_format(cls, s3_key: str, expected_user_id: int, expected_gallery_url: str) -> bool:
         """
-        Валідація формату S3 ключа.
+        Validate the format of an S3 key.
 
         Args:
-            s3_key: S3 ключ для валідації
-            expected_user_id: Очікуваний ID користувача
-            expected_gallery_url: Очікуваний Gallery URL події
+            s3_key: S3 key to validate
+            expected_user_id: Expected user ID
+            expected_gallery_url: Expected event gallery URL
 
         Returns:
-            bool: True якщо ключ валідний
+            bool: True if the key is valid
 
         Raises:
-            ValidationError: Якщо ключ невалідний
+            ValidationError: If the key is invalid
         """
         if not s3_key:
             raise ValidationError(_('S3 ключ не може бути порожнім'))
 
-        # Розбираємо шлях
         parts = s3_key.split('/')
 
         if len(parts) < 4:
@@ -102,23 +100,20 @@ class S3KeyValidator:
 
         user_bucket, event_gallery_url, album_uuid, _file_name = parts[:4]
 
-        # Перевіряємо user bucket
         expected_bucket = f'user-bucket-{expected_user_id}'
         if user_bucket != expected_bucket:
             raise ValidationError(_('S3 ключ не належить даному користувачу'))
 
-        # Перевіряємо event gallery URL
         if event_gallery_url != expected_gallery_url:
             raise ValidationError(_('S3 ключ не належить даній події'))
 
-        # Валідуємо album UUID
         cls.validate_album_name(album_uuid)
 
-        # Перевіряємо глибину шляху (захист від path traversal)
+        # Guard against path traversal via excessive depth
         if len(parts) > cls.MAX_PATH_DEPTH:
             raise ValidationError(_('Шлях занадто глибокий'))
 
-        # Перевіряємо на небезпечні символи
+        # Reject path traversal sequences and hidden-path components
         for part in parts:
             if '..' in part or part.startswith('.'):
                 raise ValidationError(_('Шлях містить небезпечні символи'))
@@ -128,21 +123,20 @@ class S3KeyValidator:
     @classmethod
     def validate_file_type(cls, file_type: str) -> str:
         """
-        Валідація типу файлу.
+        Validate the file type.
 
         Args:
-            file_type: MIME тип файлу
+            file_type: File MIME type
 
         Returns:
-            str: Валідований тип файлу
+            str: Validated file type
 
         Raises:
-            ValidationError: Якщо тип файлу не підтримується
+            ValidationError: If the file type is not supported
         """
         if not file_type:
             raise ValidationError(_('Тип файлу не може бути порожнім'))
 
-        # Дозволені MIME типи
         allowed_types = {
             'image/jpeg',
             'image/jpg',
@@ -170,80 +164,30 @@ class S3KeyValidator:
     @classmethod
     def sanitize_filename(cls, filename: str) -> str:
         """
-        Очищення та валідація імені файлу.
+        Sanitize and validate a filename.
 
         Args:
-            filename: Ім'я файлу для очищення
+            filename: Filename to sanitize
 
         Returns:
-            str: Очищене ім'я файлу
+            str: Sanitized filename
 
         Raises:
-            ValidationError: Якщо ім'я файлу невалідне
+            ValidationError: If the filename is invalid
         """
         if not filename:
             raise ValidationError(_("Ім'я файлу не може бути порожнім"))
 
-        # Видаляємо небезпечні символи
         filename = filename.strip()
 
         if len(filename) > cls.MAX_FILENAME_LENGTH:
             raise ValidationError(_("Ім'я файлу занадто довге"))
 
-        # Перевіряємо на небезпечні шляхи
+        # Reject path traversal sequences and hidden-path components
         if '..' in filename or filename.startswith('.'):
             raise ValidationError(_("Ім'я файлу містить небезпечні символи"))
 
-        # Перевіряємо дозволені символи (можна розширити)
         if not re.match(r'^[a-zA-Z0-9\-_\.\s]+$', filename):
             raise ValidationError(_("Ім'я файлу містить недозволені символи"))
 
         return filename
-
-
-class FileUploadValidator:
-    """Валідатор для завантаження файлів"""
-
-    # Максимальні розміри файлів (в байтах)
-    MAX_IMAGE_SIZE = 50 * 1024 * 1024  # 50MB
-    MAX_VIDEO_SIZE = 500 * 1024 * 1024  # 500MB
-    MAX_DOCUMENT_SIZE = 10 * 1024 * 1024  # 10MB
-
-    @classmethod
-    def validate_file_size(cls, file_type: str, file_size: int) -> bool:
-        """
-        Валідація розміру файлу за типом.
-
-        Args:
-            file_type: MIME тип файлу
-            file_size: Розмір файлу в байтах
-
-        Returns:
-            bool: True якщо розмір валідний
-
-        Raises:
-            ValidationError: Якщо файл занадто великий
-        """
-        if file_size <= 0:
-            raise ValidationError(_('Розмір файлу має бути більше 0'))
-
-        if file_type.startswith('image/'):
-            max_size = cls.MAX_IMAGE_SIZE
-            file_category = _('зображення')
-        elif file_type.startswith('video/'):
-            max_size = cls.MAX_VIDEO_SIZE
-            file_category = _('відео')
-        elif file_type.startswith('application/'):
-            max_size = cls.MAX_DOCUMENT_SIZE
-            file_category = _('документ')
-        else:
-            raise ValidationError(_('Невідомий тип файлу'))
-
-        if file_size > max_size:
-            max_size_mb = max_size // (1024 * 1024)
-            raise ValidationError(
-                _('Файл %(category)s занадто великий. Максимальний розмір: %(max_size)d MB')
-                % {'category': file_category, 'max_size': max_size_mb}
-            )
-
-        return True

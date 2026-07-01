@@ -2,6 +2,7 @@ import json
 import logging
 from abc import ABC
 from abc import abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -20,11 +21,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 
 from apps.shared.exceptions.exception import S3ServiceError
-
-# Removed interface inheritance - using simple direct class
 from apps.shared.utils.uuid_utils import S3KeyGenerator
 from apps.shared.utils.uuid_utils import UUIDValidator
-from apps.shared.utils.validators import FileUploadValidator
 from apps.shared.utils.validators import S3KeyValidator
 
 logger = logging.getLogger(__name__)
@@ -90,6 +88,10 @@ class IS3Client(ABC):
         pass
 
     @abstractmethod
+    def get_object(self, **kwargs) -> dict[str, Any]:
+        pass
+
+    @abstractmethod
     def delete_objects(self, **kwargs) -> dict[str, Any]:
         pass
 
@@ -115,6 +117,9 @@ class BotoS3Client(IS3Client):
 
     def copy_object(self, **kwargs) -> dict[str, Any]:
         return self._client.copy_object(**kwargs)
+
+    def get_object(self, **kwargs) -> dict[str, Any]:
+        return self._client.get_object(**kwargs)
 
     def delete_objects(self, **kwargs) -> dict[str, Any]:
         return self._client.delete_objects(**kwargs)
@@ -193,6 +198,20 @@ class S3KeyManager:
             raise S3ServiceError(msg)
 
 
+def _format_content_disposition(filename: str) -> str:
+    """Build a safe ``attachment`` Content-Disposition for an arbitrary filename.
+
+    Uses RFC 5987 ``filename*`` (percent-encoded UTF-8) so names with spaces,
+    parentheses, or non-ASCII characters download correctly, with an ASCII
+    ``filename`` fallback. Both forms are injection-safe: the fallback drops
+    control characters, quotes, and non-ASCII; ``filename*`` percent-encodes
+    everything unsafe.
+    """
+    ascii_fallback = ''.join(c for c in filename if 32 <= ord(c) < 127 and c not in '"\\') or 'download'
+    rfc5987 = "UTF-8''" + quote(filename, safe='')
+    return f'attachment; filename="{ascii_fallback}"; filename*={rfc5987}'
+
+
 class S3URLGenerator:
     """Handles generation of presigned URLs."""
 
@@ -244,8 +263,7 @@ class S3URLGenerator:
         params = {'Bucket': self.bucket_name, 'Key': s3_key}
 
         if filename:
-            sanitized_filename = S3KeyValidator.sanitize_filename(filename)
-            params['ResponseContentDisposition'] = f'attachment; filename="{sanitized_filename}"'
+            params['ResponseContentDisposition'] = _format_content_disposition(filename)
 
         if response_headers:
             for header, value in response_headers.items():
@@ -335,12 +353,64 @@ class S3URLGenerator:
                 conditions.append({meta_key: value})
 
 
+# S3's DeleteObjects API accepts at most 1000 keys per request.
+_S3_DELETE_BATCH_LIMIT = 1000
+
+
 class S3ObjectManager:
     """Manages S3 object operations."""
 
     def __init__(self, s3_client: IS3Client, bucket_name: str):
         self.s3_client = s3_client
         self.bucket_name = bucket_name
+
+    def _paginate_objects(self, prefix: str, max_keys: int | None = None) -> Iterator[dict[str, Any]]:
+        """Yield raw S3 object dicts under ``prefix``, transparently paginating.
+
+        ``list_objects_v2`` returns at most 1000 objects per page; this follows
+        the continuation token until the prefix is exhausted. ``max_keys`` caps
+        the total yielded (stopping early); ``None`` streams every object.
+        """
+        yielded = 0
+        continuation_token: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {'Bucket': self.bucket_name, 'Prefix': prefix}
+            if continuation_token:
+                kwargs['ContinuationToken'] = continuation_token
+
+            response = self.s3_client.list_objects_v2(**kwargs)
+
+            for obj in response.get('Contents', []):
+                yield obj
+                yielded += 1
+                if max_keys is not None and yielded >= max_keys:
+                    return
+
+            if not response.get('IsTruncated'):
+                return
+            continuation_token = response.get('NextContinuationToken')
+
+    def _delete_keys(self, keys: list[str]) -> int:
+        """Delete ``keys`` in batches of 1000 (the DeleteObjects limit), raising on any failure."""
+        deleted_count = 0
+        errors: list[dict[str, Any]] = []
+
+        for start in range(0, len(keys), _S3_DELETE_BATCH_LIMIT):
+            batch = keys[start : start + _S3_DELETE_BATCH_LIMIT]
+            response = self.s3_client.delete_objects(
+                Bucket=self.bucket_name,
+                Delete={'Objects': [{'Key': key} for key in batch]},
+            )
+            deleted_count += len(response.get('Deleted', []))
+            if response.get('Errors'):
+                errors.extend(response['Errors'])
+
+        if errors:
+            logger.error(f'Failed to delete {len(errors)} object(s): {errors}')
+            msg = f'Failed to delete {len(errors)} of {len(keys)} objects'
+            raise S3ServiceError(msg)
+
+        return deleted_count
 
     def object_exists(self, s3_key: str) -> bool:
         """Check if object exists in S3."""
@@ -375,24 +445,18 @@ class S3ObjectManager:
             msg = f'Error getting object metadata: {e}'
             raise S3ServiceError(msg)
 
-    def list_objects_with_prefix(self, prefix: str, max_keys: int = 1000) -> list[S3ObjectInfo]:
-        """List objects with given prefix."""
+    def list_objects_with_prefix(self, prefix: str, max_keys: int | None = 1000) -> list[S3ObjectInfo]:
+        """List objects with given prefix (paginated; pass ``max_keys=None`` for all)."""
         try:
-            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix, MaxKeys=max_keys)
-
-            objects = []
-            if 'Contents' in response:
-                for obj in response['Contents']:
-                    objects.append(
-                        S3ObjectInfo(
-                            key=obj['Key'],
-                            size=obj['Size'],
-                            last_modified=obj['LastModified'].isoformat(),
-                            etag=obj['ETag'],
-                        )
-                    )
-
-            return objects
+            return [
+                S3ObjectInfo(
+                    key=obj['Key'],
+                    size=obj['Size'],
+                    last_modified=obj['LastModified'].isoformat(),
+                    etag=obj['ETag'],
+                )
+                for obj in self._paginate_objects(prefix, max_keys)
+            ]
 
         except ClientError as e:
             error_msg = f'Error listing objects with prefix {prefix}: {e}'
@@ -429,24 +493,68 @@ class S3ObjectManager:
             logger.exception(error_msg)
             raise S3ServiceError(error_msg)
 
-    def delete_objects_with_prefix(self, prefix: str) -> int:
-        """Delete all objects with given prefix."""
+    def download_object(self, s3_key: str) -> bytes:
+        """Download object bytes from S3."""
         try:
-            objects = self.list_objects_with_prefix(prefix)
+            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
+            data = response['Body'].read()
+            logger.info(f'Downloaded object {s3_key} ({len(data)} bytes)')
+            return data
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                msg = f'Object not found: {s3_key}'
+                raise S3ServiceError(msg)
+            logger.exception(f'Error downloading object {s3_key}: {e}')
+            msg = f'Error downloading object: {e}'
+            raise S3ServiceError(msg)
 
-            if not objects:
+    def upload_object(self, s3_key: str, body: bytes, content_type: str) -> None:
+        """Upload object bytes to S3."""
+        try:
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=body,
+                ContentType=content_type,
+            )
+            logger.info(f'Uploaded object {s3_key} ({len(body)} bytes, {content_type})')
+        except ClientError as e:
+            logger.exception(f'Error uploading object {s3_key}: {e}')
+            msg = f'Error uploading object: {e}'
+            raise S3ServiceError(msg)
+
+    def delete_object(self, s3_key: str) -> int:
+        """Delete a single object by its exact key (no prefix expansion)."""
+        try:
+            response = self.s3_client.delete_objects(
+                Bucket=self.bucket_name,
+                Delete={'Objects': [{'Key': s3_key}]},
+            )
+
+            if response.get('Errors'):
+                logger.error(f'Failed to delete object {s3_key}: {response['Errors']}')
+                msg = f'Error deleting object: {s3_key}'
+                raise S3ServiceError(msg)
+
+            deleted_count = len(response.get('Deleted', []))
+            logger.info(f'Deleted object: {s3_key}')
+            return deleted_count
+
+        except ClientError as e:
+            error_msg = f'Error deleting object {s3_key}: {e}'
+            logger.exception(error_msg)
+            raise S3ServiceError(error_msg)
+
+    def delete_objects_with_prefix(self, prefix: str) -> int:
+        """Delete every object under ``prefix`` (fully paginated, batched ≤1000/request)."""
+        try:
+            keys = [obj['Key'] for obj in self._paginate_objects(prefix)]
+
+            if not keys:
                 logger.info(f'No objects found with prefix: {prefix}')
                 return 0
 
-            delete_objects = [{'Key': obj.key} for obj in objects]
-
-            response = self.s3_client.delete_objects(Bucket=self.bucket_name, Delete={'Objects': delete_objects})
-
-            deleted_count = len(response.get('Deleted', []))
-
-            if 'Errors' in response:
-                logger.error(f"Failed to delete some objects: {response['Errors']}")
-
+            deleted_count = self._delete_keys(keys)
             logger.info(f'Deleted {deleted_count} objects with prefix: {prefix}')
             return deleted_count
 
@@ -459,9 +567,10 @@ class S3ObjectManager:
 class S3FolderManager:
     """Manages S3 folder operations."""
 
-    def __init__(self, s3_client: IS3Client, bucket_name: str):
+    def __init__(self, s3_client: IS3Client, bucket_name: str, object_manager: S3ObjectManager):
         self.s3_client = s3_client
         self.bucket_name = bucket_name
+        self.object_manager = object_manager
 
     def create_folder(self, folder_path: str) -> bool:
         """Create folder in S3 (empty object with trailing slash)."""
@@ -520,8 +629,7 @@ class S3FolderManager:
             raise S3ServiceError(error_msg)
 
     def delete_folder(self, folder_path: str) -> int:
-        """
-        Delete folder and all its contents.
+        """Delete a folder and all of its contents (fully paginated and batched).
 
         Args:
             folder_path: Path to folder to delete
@@ -529,33 +637,12 @@ class S3FolderManager:
         Returns:
             int: Number of objects deleted
         """
-        try:
-            if not folder_path.endswith('/'):
-                folder_path += '/'
+        if not folder_path.endswith('/'):
+            folder_path += '/'
 
-            # List and delete all objects in the folder
-            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=folder_path)
-
-            if 'Contents' not in response:
-                logger.info(f'No objects found in folder: {folder_path}')
-                return 0
-
-            delete_objects = [{'Key': obj['Key']} for obj in response['Contents']]
-
-            delete_response = self.s3_client.delete_objects(Bucket=self.bucket_name, Delete={'Objects': delete_objects})
-
-            deleted_count = len(delete_response.get('Deleted', []))
-
-            if 'Errors' in delete_response:
-                logger.error(f"Failed to delete some objects in {folder_path}: " f"{delete_response['Errors']}")
-
-            logger.info(f'Deleted folder {folder_path} with {deleted_count} objects')
-            return deleted_count
-
-        except ClientError as e:
-            error_msg = f'Error deleting folder {folder_path}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
+        deleted_count = self.object_manager.delete_objects_with_prefix(folder_path)
+        logger.info(f'Deleted folder {folder_path} with {deleted_count} objects')
+        return deleted_count
 
 
 class OptimizedS3Service:
@@ -575,7 +662,7 @@ class OptimizedS3Service:
 
         self.url_generator = S3URLGenerator(self.s3_client, self.bucket_name, self.config)
         self.object_manager = S3ObjectManager(self.s3_client, self.bucket_name)
-        self.folder_manager = S3FolderManager(self.s3_client, self.bucket_name)
+        self.folder_manager = S3FolderManager(self.s3_client, self.bucket_name, self.object_manager)
 
     def generate_event_structure(self, user_uuid: str, event_uuid: str) -> dict[str, str]:
         return S3KeyManager.generate_event_structure(user_uuid, event_uuid)
@@ -607,12 +694,12 @@ class OptimizedS3Service:
         filename: str | None = None,
         response_headers: dict[str, str] | None = None,
     ) -> str:
-        """Generate presigned download URL."""
-        # Verify object exists before generating URL
-        if not self.object_manager.object_exists(s3_key):
-            msg = f'Object not found: {s3_key}'
-            raise S3ServiceError(msg)
+        """Generate presigned download URL.
 
+        Signing is local and the DB row is authoritative, so we do not pay a
+        round-trip ``head_object`` here — a URL for a (rare) missing object
+        simply 404s on use, which the client already handles.
+        """
         return self.url_generator.generate_download_url(s3_key, expires_in, filename, response_headers)
 
     def generate_presigned_delete_url(self, s3_key: str, expires_in: int | None = None) -> str:
@@ -668,6 +755,18 @@ class OptimizedS3Service:
         """Copy object with new metadata."""
         return self.object_manager.copy_object_with_metadata(source_key, destination_key, metadata)
 
+    def download_object(self, s3_key: str) -> bytes:
+        """Download object bytes from S3."""
+        return self.object_manager.download_object(s3_key)
+
+    def upload_object(self, s3_key: str, body: bytes, content_type: str) -> None:
+        """Upload object bytes to S3."""
+        self.object_manager.upload_object(s3_key, body, content_type)
+
+    def delete_object(self, s3_key: str) -> int:
+        """Delete a single object by its exact key (no prefix expansion)."""
+        return self.object_manager.delete_object(s3_key)
+
     def delete_objects_with_prefix(self, prefix: str) -> int:
         """Delete all objects with given prefix."""
         return self.object_manager.delete_objects_with_prefix(prefix)
@@ -689,3 +788,18 @@ class OptimizedS3Service:
     def delete_folder(self, folder_path: str) -> int:
         """Delete folder and all its contents."""
         return self.folder_manager.delete_folder(folder_path)
+
+
+# Module-level singleton — boto3 low-level clients are thread-safe, so one
+# instance per process is correct and cheaper than re-creating the boto3
+# client on every HTTP request. Tests that need a fresh patched instance
+# should set _optimized_s3_service to None before patching the class.
+_optimized_s3_service: OptimizedS3Service | None = None
+
+
+def get_optimized_s3_service() -> OptimizedS3Service:
+    """Return the process-wide OptimizedS3Service singleton, creating it lazily."""
+    global _optimized_s3_service  # noqa: PLW0603 — intentional lazy singleton init
+    if _optimized_s3_service is None:
+        _optimized_s3_service = OptimizedS3Service()
+    return _optimized_s3_service

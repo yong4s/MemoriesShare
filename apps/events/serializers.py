@@ -11,10 +11,6 @@ from rest_framework import serializers
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
 
-# =============================================================================
-# EVENT SERIALIZERS
-# =============================================================================
-
 
 class EventCreateSerializer(serializers.ModelSerializer):
     """Create new event"""
@@ -50,9 +46,18 @@ class EventCreateSerializer(serializers.ModelSerializer):
         return value
 
 
+def _resolve_owner_participant(event):
+    """Find OWNER participant via prefetched participants_through (0 queries when prefetch is active)."""
+    for participation in event.participants_through.all():
+        if participation.role == EventParticipant.Role.OWNER:
+            return participation
+    return None
+
+
 class EventDetailSerializer(serializers.ModelSerializer):
     """Event details with statistics"""
 
+    owner_id = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     owner_email = serializers.SerializerMethodField()
 
@@ -75,6 +80,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'address',
             'all_day',
             'is_public',
+            'owner_id',
             'owner_name',
             'owner_email',
             'created_at',
@@ -87,6 +93,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'event_uuid',
+            'owner_id',
             'owner_name',
             'owner_email',
             'created_at',
@@ -98,88 +105,21 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'pending_count',
         ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Cache owner data to prevent N+1 queries
-        self._owner_cache = {}
-
-    def to_representation(self, instance):
-        """Override to optimize owner data fetching"""
-        # Pre-fetch owner data for all instances to prevent N+1
-        if hasattr(self, 'parent') and self.parent and hasattr(self.parent, 'instance'):
-            # This is part of a many=True serialization
-            self._prefetch_owners_for_queryset()
-        elif hasattr(instance, '_prefetched_objects_cache'):
-            # Single instance with prefetch
-            self._cache_owner_for_instance(instance)
-
-        return super().to_representation(instance)
-
-    def _prefetch_owners_for_queryset(self):
-        """Pre-fetch owner data for multiple instances to prevent N+1"""
-        if hasattr(self, '_owners_prefetched'):
-            return
-
-        instances = self.parent.instance if hasattr(self.parent, 'instance') else []
-        if not instances:
-            return
-
-        # Get all event IDs
-        event_ids = [instance.id for instance in instances if hasattr(instance, 'id')]
-        if not event_ids:
-            return
-
-        # Fetch all owners in one query
-        from apps.events.models.event_participant import EventParticipant
-
-        owners = EventParticipant.objects.filter(
-            event_id__in=event_ids, role=EventParticipant.Role.OWNER
-        ).select_related('user', 'event')
-
-        # Cache owners by event_id
-        for owner in owners:
-            self._owner_cache[owner.event_id] = owner
-
-        self._owners_prefetched = True
-
-    def _cache_owner_for_instance(self, instance):
-        """Cache owner for single instance"""
-        if instance.id not in self._owner_cache:
-            try:
-                owner = (
-                    instance.eventparticipant_set.filter(role=EventParticipant.Role.OWNER)
-                    .select_related('user')
-                    .first()
-                )
-                self._owner_cache[instance.id] = owner
-            except Exception:
-                self._owner_cache[instance.id] = None
+    def get_owner_id(self, obj):
+        owner = _resolve_owner_participant(obj)
+        return owner.user_id if owner else None
 
     def get_owner_name(self, obj):
-        """Get owner name from cached EventParticipant"""
-        owner = self._owner_cache.get(obj.id)
-        if owner is None:
-            # Fallback for single instance without prefetch
-            try:
-                owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
-                self._owner_cache[obj.id] = owner
-            except Exception:
-                return 'Unknown'
-
-        return owner.user.display_name if owner and owner.user else 'No Owner'
+        owner = _resolve_owner_participant(obj)
+        if owner and owner.user:
+            return owner.user.display_name
+        return 'No Owner'
 
     def get_owner_email(self, obj):
-        """Get owner email from cached EventParticipant"""
-        owner = self._owner_cache.get(obj.id)
-        if owner is None:
-            # Fallback for single instance without prefetch
-            try:
-                owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
-                self._owner_cache[obj.id] = owner
-            except Exception:
-                return ''
-
-        return owner.user.email if owner and owner.user else ''
+        owner = _resolve_owner_participant(obj)
+        if owner and owner.user:
+            return owner.user.email
+        return ''
 
 
 class EventListSerializer(serializers.ModelSerializer):
@@ -207,72 +147,11 @@ class EventListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Cache owner data to prevent N+1 queries
-        self._owner_cache = {}
-
-    def to_representation(self, instance):
-        """Override to optimize owner data fetching"""
-        if isinstance(self.instance, list) and not hasattr(self, '_owners_prefetched'):
-            self._prefetch_owners_for_list()
-        elif hasattr(instance, '_prefetched_objects_cache'):
-            self._cache_owner_for_instance(instance)
-
-        return super().to_representation(instance)
-
-    def _prefetch_owners_for_list(self):
-        """Pre-fetch owner data for list view to prevent N+1"""
-        if hasattr(self, '_owners_prefetched'):
-            return
-
-        instances = self.instance if isinstance(self.instance, list) else []
-        if not instances:
-            return
-
-        # Get all event IDs
-        event_ids = [instance.id for instance in instances if hasattr(instance, 'id')]
-        if not event_ids:
-            return
-
-        # Fetch all owners in one query
-        from apps.events.models.event_participant import EventParticipant
-
-        owners = EventParticipant.objects.filter(
-            event_id__in=event_ids, role=EventParticipant.Role.OWNER
-        ).select_related('user')
-
-        # Cache owners by event_id
-        for owner in owners:
-            self._owner_cache[owner.event_id] = owner
-
-        self._owners_prefetched = True
-
-    def _cache_owner_for_instance(self, instance):
-        """Cache owner for single instance"""
-        if instance.id not in self._owner_cache:
-            try:
-                owner = (
-                    instance.eventparticipant_set.filter(role=EventParticipant.Role.OWNER)
-                    .select_related('user')
-                    .first()
-                )
-                self._owner_cache[instance.id] = owner
-            except Exception:
-                self._owner_cache[instance.id] = None
-
     def get_owner_name(self, obj):
-        """Get owner name from cached EventParticipant"""
-        owner = self._owner_cache.get(obj.id)
-        if owner is None:
-            # Fallback for single instance without prefetch
-            try:
-                owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
-                self._owner_cache[obj.id] = owner
-            except Exception:
-                return 'Unknown'
-
-        return owner.user.display_name if owner and owner.user else 'No Owner'
+        owner = _resolve_owner_participant(obj)
+        if owner and owner.user:
+            return owner.user.display_name
+        return 'No Owner'
 
 
 class EventUpdateSerializer(serializers.ModelSerializer):
@@ -320,18 +199,10 @@ class EventCreatedResponseSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_owner_name(self, obj):
-        """Get owner name from EventParticipant - optimized version"""
-        try:
-            # Use select_related for single query optimization
-            owner = obj.eventparticipant_set.filter(role=EventParticipant.Role.OWNER).select_related('user').first()
-            return owner.user.display_name if owner and owner.user else 'No Owner'
-        except Exception:
-            return 'Unknown'
-
-
-# =============================================================================
-# PARTICIPANT SERIALIZERS
-# =============================================================================
+        owner = _resolve_owner_participant(obj)
+        if owner and owner.user:
+            return owner.user.display_name
+        return 'No Owner'
 
 
 class EventParticipantDetailSerializer(serializers.ModelSerializer):
@@ -402,7 +273,7 @@ class GuestInviteSerializer(serializers.Serializer):
     """Invite guest to event"""
 
     guest_name = serializers.CharField(max_length=255, min_length=2)
-    guest_email = serializers.EmailField(required=False, allow_blank=True)
+    guest_email = serializers.EmailField(required=True)
 
     def validate_guest_name(self, value):
         """Validate guest name"""
@@ -418,9 +289,36 @@ class BulkGuestInviteSerializer(serializers.Serializer):
     guests = serializers.ListField(child=GuestInviteSerializer(), min_length=1, max_length=50)
 
 
-# =============================================================================
-# QUERY PARAMETER SERIALIZERS
-# =============================================================================
+class EventPublicInviteIssueSerializer(serializers.Serializer):
+    """Input for issuing a shared public invite URL."""
+
+    ttl_hours = serializers.IntegerField(required=False, default=24, min_value=1, max_value=168)
+    max_uses = serializers.IntegerField(required=False, default=10000, min_value=1, max_value=100000)
+
+
+class EventPublicInviteIssueResponseSerializer(serializers.Serializer):
+    """Response with URL for frontend-side QR generation."""
+
+    invite_url = serializers.URLField()
+    reused = serializers.BooleanField()
+    max_uses = serializers.IntegerField()
+    expires_at = serializers.CharField(allow_null=True)
+
+
+class EventPublicInviteJoinSerializer(serializers.Serializer):
+    """Input for joining an event via signed public invite link."""
+
+    invite_token = serializers.CharField(max_length=1024)
+
+
+class EventPublicInviteJoinResponseSerializer(serializers.Serializer):
+    """Join result payload for signed public invite flow."""
+
+    event_uuid = serializers.UUIDField()
+    event_name = serializers.CharField()
+    participant_id = serializers.IntegerField()
+    participant_name = serializers.CharField()
+    already_joined = serializers.BooleanField()
 
 
 class EventListQuerySerializer(serializers.Serializer):
@@ -429,7 +327,10 @@ class EventListQuerySerializer(serializers.Serializer):
     page = serializers.IntegerField(default=1, min_value=1)
     page_size = serializers.IntegerField(default=20, min_value=1, max_value=100)
     search = serializers.CharField(required=False, max_length=255)
-    owned_only = serializers.BooleanField(default=False)
+    scope = serializers.ChoiceField(
+        choices=['all', 'owned', 'participating', 'public'],
+        default='all',
+    )
 
 
 class ParticipantListQuerySerializer(serializers.Serializer):

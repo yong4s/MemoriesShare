@@ -1,20 +1,18 @@
 import logging
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db import transaction
+from django.utils import timezone
 
 from apps.accounts.dal.user_dal import UserDAL
 from apps.accounts.models.custom_user import CustomUser
 from apps.shared.exceptions.user_exceptions import EmailAlreadyExistsError
+from apps.shared.exceptions.user_exceptions import GuestInviteRegisteredConflictError
 from apps.shared.exceptions.user_exceptions import UserAuthenticationError
 from apps.shared.exceptions.user_exceptions import UserCreationError
-from apps.shared.exceptions.user_exceptions import UserNotFoundError
 from apps.shared.exceptions.user_exceptions import UserValidationError
 
 logger = logging.getLogger(__name__)
@@ -23,12 +21,8 @@ logger = logging.getLogger(__name__)
 class UserService:
     """Service layer for user operations"""
 
-    def __init__(self, dal: UserDAL = None):
+    def __init__(self, dal: UserDAL | None = None):
         self.dal = dal or UserDAL()
-
-    # =============================================================================
-    # USER CREATION OPERATIONS
-    # =============================================================================
 
     @transaction.atomic
     def create_registered_user(
@@ -58,15 +52,12 @@ class UserService:
             UserCreationError: If creation fails
         """
         try:
-            # Validate email uniqueness
             if self.dal.get_by_email(email, registered_only=True):
                 msg = f'Registered user with email {email} already exists'
                 raise EmailAlreadyExistsError(msg)
 
-            # Validate input data
             self._validate_registered_user_data(email, password, first_name, last_name)
 
-            # Create user through DAL
             user = self.dal.create_registered_user(
                 email=email,
                 password=password,
@@ -94,36 +85,46 @@ class UserService:
     def create_guest_user(
         self,
         guest_name: str,
-        guest_email: str = '',
-        invite_token: str | None = None,
+        guest_email: str,
         **extra_fields,
     ) -> CustomUser:
         """
-        Create a guest user for event participation.
+        Get existing user by email or create a new guest user.
 
-        Args:
-            guest_name: Display name for the guest
-            guest_email: Optional contact email (not for authentication)
-            invite_token: Optional invitation token used
-            **extra_fields: Additional user fields
-
-        Returns:
-            CustomUser instance with is_registered=False
-
-        Raises:
-            UserValidationError: If validation fails
-            UserCreationError: If creation fails
+        If a user with this email already exists (registered or guest),
+        returns the existing user. Otherwise creates a new guest user.
         """
         try:
-            # Validate guest data
             self._validate_guest_user_data(guest_name, guest_email)
 
-            # Create guest user through DAL
-            user = self.dal.create_guest_user(guest_name=guest_name, invite_token=invite_token, **extra_fields)
+            # Reject if email belongs to a registered account — silently linking
+            # somebody else's registered identity as a "guest" of an event the
+            # actor controls is an authorization bypass (H1).
+            existing_user = self.dal.get_by_email(guest_email, registered_only=False)
+            if existing_user and existing_user.is_registered:
+                logger.warning(
+                    f'Guest invite blocked: email {guest_email} belongs to registered user {existing_user.id}'
+                )
+                raise GuestInviteRegisteredConflictError
+
+            if existing_user:
+                # Reuse existing GUEST row (is_registered=False); refresh stale guest_name.
+                if not existing_user.guest_name and guest_name:
+                    self.dal.update_user(existing_user, guest_name=guest_name)
+                logger.info(f'Reusing existing guest user for invite: {guest_email} (ID: {existing_user.id})')
+                return existing_user
+
+            user = self.dal.create_guest_user(
+                guest_name=guest_name,
+                email=guest_email,
+                **extra_fields,
+            )
 
             logger.info(f'Created guest user: {guest_name} (ID: {user.id})')
             return user
 
+        except GuestInviteRegisteredConflictError:
+            raise
         except ValidationError as e:
             logger.exception(f'Validation error creating guest user: {e}')
             raise UserValidationError(str(e))
@@ -131,56 +132,6 @@ class UserService:
             logger.exception(f'Unexpected error creating guest user: {e}')
             msg = f'Failed to create guest user: {e}'
             raise UserCreationError(msg)
-
-    @transaction.atomic
-    def create_guest_from_invitation(self, invite_token: str, guest_name: str, guest_email: str = '') -> CustomUser:
-        """
-        Create guest user from invitation token.
-
-        Args:
-            invite_token: Valid invitation token
-            guest_name: Display name for guest
-            guest_email: Optional contact email
-
-        Returns:
-            CustomUser instance for guest
-
-        Raises:
-            UserValidationError: If token is invalid or data is invalid
-            UserCreationError: If creation fails
-        """
-        try:
-            # Validate invitation token
-            if not invite_token:
-                msg = 'Invitation token is required'
-                raise UserValidationError(msg)
-
-            # Check if token was already used
-            existing_user = self.dal.get_by_invite_token(invite_token)
-            if existing_user:
-                msg = 'Invitation token has already been used'
-                raise UserValidationError(msg)
-
-            # Create guest user
-            user = self.create_guest_user(
-                guest_name=guest_name,
-                guest_email=guest_email,
-                invite_token=invite_token,
-            )
-
-            logger.info(f'Created guest user from invitation: {guest_name} (Token: {invite_token[:8]}...)')
-            return user
-
-        except UserValidationError:
-            raise
-        except Exception as e:
-            logger.exception(f'Error creating guest from invitation: {e}')
-            msg = f'Failed to create guest from invitation: {e}'
-            raise UserCreationError(msg)
-
-    # =============================================================================
-    # USER CONVERSION OPERATIONS
-    # =============================================================================
 
     @transaction.atomic
     def convert_guest_to_registered(
@@ -213,20 +164,16 @@ class UserService:
             UserCreationError: If conversion fails
         """
         try:
-            # Validate that user is actually a guest
             if guest_user.is_registered:
                 msg = 'User is already registered'
                 raise UserValidationError(msg)
 
-            # Validate email availability
             if self.dal.get_by_email(email, registered_only=True):
                 msg = f'Email {email} is already in use by registered user'
                 raise EmailAlreadyExistsError(msg)
 
-            # Validate registration data
             self._validate_registered_user_data(email, password, first_name, last_name)
 
-            # Convert using model method
             converted_user = guest_user.convert_to_registered(
                 email=email,
                 password=password,
@@ -247,10 +194,6 @@ class UserService:
             msg = f'Failed to convert guest to registered user: {e}'
             raise UserCreationError(msg)
 
-    # =============================================================================
-    # USER AUTHENTICATION OPERATIONS
-    # =============================================================================
-
     def authenticate_user(self, email: str, password: str) -> CustomUser | None:
         """
         Authenticate registered user by email and password.
@@ -266,13 +209,11 @@ class UserService:
             UserAuthenticationError: If authentication fails
         """
         try:
-            # Only registered users can authenticate
             user = self.dal.get_by_email(email, registered_only=True)
             if not user:
                 logger.warning(f'Authentication attempt for non-existent email: {email}')
                 return None
 
-            # Use Django's authenticate
             authenticated_user = authenticate(email=email, password=password)
             if authenticated_user and authenticated_user.is_registered:
                 logger.info(f'Successful authentication for user: {email}')
@@ -285,36 +226,6 @@ class UserService:
             logger.exception(f'Error during authentication for {email}: {e}')
             msg = f'Authentication failed: {e}'
             raise UserAuthenticationError(msg)
-
-    def verify_guest_access(self, invite_token: str) -> CustomUser | None:
-        """
-        Verify guest access using invitation token.
-
-        Args:
-            invite_token: Invitation token to verify
-
-        Returns:
-            CustomUser if token is valid, None otherwise
-        """
-        try:
-            if not invite_token:
-                return None
-
-            user = self.dal.get_by_invite_token(invite_token)
-            if user and user.is_guest and user.is_active:
-                logger.info(f'Valid guest access for token: {invite_token[:8]}...')
-                return user
-
-            logger.warning(f'Invalid guest access attempt with token: {invite_token[:8]}...')
-            return None
-
-        except Exception as e:
-            logger.exception(f'Error verifying guest access: {e}')
-            return None
-
-    # =============================================================================
-    # USER QUERY OPERATIONS
-    # =============================================================================
 
     def get_user_by_id(self, user_id: int) -> CustomUser | None:
         """Get user by ID"""
@@ -340,10 +251,6 @@ class UserService:
         """Search users by name or email"""
         return self.dal.search_users(query, registered_only=registered_only)
 
-    # =============================================================================
-    # USER PROFILE OPERATIONS
-    # =============================================================================
-
     @transaction.atomic
     def update_user_profile(self, user: CustomUser, **update_fields) -> CustomUser:
         """
@@ -361,10 +268,8 @@ class UserService:
             UserCreationError: If update fails
         """
         try:
-            # Validate update fields
             self._validate_profile_update(user, update_fields)
 
-            # Update through DAL
             updated_user = self.dal.update_user(user, **update_fields)
 
             logger.info(f'Updated profile for user {user.id}')
@@ -377,6 +282,44 @@ class UserService:
             logger.exception(f'Error updating user profile: {e}')
             msg = f'Failed to update user profile: {e}'
             raise UserCreationError(msg)
+
+    @transaction.atomic
+    def set_account_password(self, user: CustomUser, password: str) -> CustomUser:
+        """Set or replace the user's password.
+
+        If the user previously had no password (passwordless account), flips
+        `is_registered=True` so the model invariant holds. After this the
+        user can log in with either password or the passwordless code flow.
+        """
+        if not password or len(password) < 8:
+            msg = 'Password must be at least 8 characters long'
+            raise UserValidationError(msg)
+
+        user.set_password(password)
+        user.password_changed_at = timezone.now()
+        if not user.is_registered:
+            user.is_registered = True
+            if user.preferred_login_method == CustomUser.LoginMethod.PASSWORDLESS:
+                user.preferred_login_method = CustomUser.LoginMethod.PASSWORD
+        user.save()
+
+        logger.info(f'Password set on account {user.id} ({user.email})')
+        return user
+
+    @transaction.atomic
+    def update_login_preference(self, user: CustomUser, method: str) -> CustomUser:
+        """Update the user's preferred login method."""
+        if method not in dict(CustomUser.LoginMethod.choices):
+            msg = f'Unknown login method: {method}'
+            raise UserValidationError(msg)
+        if method == CustomUser.LoginMethod.PASSWORD and not user.has_usable_password():
+            msg = 'Cannot prefer password login without a password set'
+            raise UserValidationError(msg)
+
+        user.preferred_login_method = method
+        user.save(update_fields=['preferred_login_method', 'updated_at'])
+        logger.info(f'Login preference updated for user {user.id}: {method}')
+        return user
 
     @transaction.atomic
     def deactivate_user(self, user: CustomUser) -> CustomUser:
@@ -411,10 +354,6 @@ class UserService:
 
         logger.info(f'Reactivated user {user.id}')
         return user
-
-    # =============================================================================
-    # MAINTENANCE OPERATIONS
-    # =============================================================================
 
     def cleanup_inactive_guests(self, days_old: int = 30) -> int:
         """
@@ -458,10 +397,6 @@ class UserService:
             logger.exception(f'Error getting user statistics: {e}')
             return {}
 
-    # =============================================================================
-    # PRIVATE VALIDATION METHODS
-    # =============================================================================
-
     def _validate_registered_user_data(self, email: str, password: str, first_name: str, last_name: str) -> None:
         """Validate data for registered user creation"""
         errors = []
@@ -488,29 +423,28 @@ class UserService:
         if not guest_name or len(guest_name.strip()) < 2:
             errors.append('Guest name must be at least 2 characters long')
 
-        if guest_email and '@' not in guest_email:
-            errors.append('Guest email must be a valid email address if provided')
+        if not guest_email:
+            errors.append('Guest email is required')
+        elif '@' not in guest_email:
+            errors.append('Guest email must be a valid email address')
 
         if errors:
             raise ValidationError(errors)
 
     def _validate_profile_update(self, user: CustomUser, update_fields: dict[str, Any]) -> None:
         """Validate profile update fields"""
-        # Prevent changing critical fields
         forbidden_fields = ['id', 'user_uuid', 'is_registered', 'password']
         for field in forbidden_fields:
             if field in update_fields:
                 msg = f"Field '{field}' cannot be updated through profile update"
                 raise ValidationError(msg)
 
-        # Validate email changes for registered users
         if 'email' in update_fields and user.is_registered:
             new_email = update_fields['email']
             if not new_email or '@' not in new_email:
                 msg = 'Valid email address is required for registered users'
                 raise ValidationError(msg)
 
-            # Check email uniqueness
             existing_user = self.dal.get_by_email(new_email, registered_only=True)
             if existing_user and existing_user.id != user.id:
                 msg = 'Email address is already in use'
