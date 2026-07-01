@@ -194,7 +194,7 @@ const Login = () => {
           Sign in with a code instead
         </button>
         <button
-          className="text-center text-xs text-zinc-500 transition-colors hover:text-zinc-700"
+          className="text-center text-xs text-ink-muted transition-colors hover:text-ink"
           onClick={resetToEmail}
           type="button"
         >
@@ -235,7 +235,7 @@ const Login = () => {
           </button>
         )}
         <button
-          className="text-center text-xs text-zinc-500 transition-colors hover:text-zinc-700"
+          className="text-center text-xs text-ink-muted transition-colors hover:text-ink"
           onClick={resetToEmail}
           type="button"
         >
@@ -252,14 +252,14 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center bg-zinc-50 px-4">
+    <div className="flex min-h-[80vh] items-center justify-center px-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 shadow-lg shadow-brand-200">
             <Camera className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-950">Welcome back</h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to Media Flow with your email</p>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Welcome back</h1>
+          <p className="mt-1 text-sm text-ink-muted">Sign in to Media Flow with your email</p>
         </div>
 
         {statusMessage && (

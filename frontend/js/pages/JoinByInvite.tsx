@@ -97,8 +97,8 @@ const JoinByInvite = () => {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
                   <XCircle className="h-8 w-8 text-red-500" />
                 </div>
-                <h2 className="mb-2 text-xl font-semibold text-slate-900">Unable to Join</h2>
-                <p className="mb-4 text-sm text-zinc-500">{errorMessage}</p>
+                <h2 className="mb-2 text-xl font-semibold text-ink">Unable to Join</h2>
+                <p className="mb-4 text-sm text-ink-muted">{errorMessage}</p>
                 {inviteToken && (
                   <Button variant="secondary" onClick={handleRetry} icon={<RefreshCw className="h-4 w-4" />}>
                     Retry
@@ -118,22 +118,22 @@ const JoinByInvite = () => {
                     <PartyPopper className="h-8 w-8 text-emerald-500" />
                   )}
                 </div>
-                <h2 className="mb-2 text-xl font-semibold text-slate-900">
+                <h2 className="mb-2 text-xl font-semibold text-ink">
                   {result.already_joined ? 'Already Joined' : 'You\'re In!'}
                 </h2>
-                <p className="mb-4 text-sm text-zinc-500">
+                <p className="mb-4 text-sm text-ink-muted">
                   {result.already_joined ? 'You are already a member of this event.' : 'You have successfully joined the event.'}
                 </p>
 
-                <div className="mb-6 rounded-xl bg-zinc-50 p-4 text-left">
+                <div className="mb-6 rounded-xl bg-surface-2 p-4 text-left">
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="font-medium text-zinc-500">Event</span>
-                      <span className="text-slate-800">{result.event_name}</span>
+                      <span className="font-medium text-ink-muted">Event</span>
+                      <span className="text-ink">{result.event_name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="font-medium text-zinc-500">Participant</span>
-                      <span className="text-slate-800">{result.participant_name}</span>
+                      <span className="font-medium text-ink-muted">Participant</span>
+                      <span className="text-ink">{result.participant_name}</span>
                     </div>
                   </div>
                 </div>

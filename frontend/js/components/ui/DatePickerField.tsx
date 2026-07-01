@@ -61,7 +61,7 @@ const DatePickerField: React.FC<DatePickerFieldProps> = ({
     <div>
       <label htmlFor={fieldId} className="mb-1.5 block text-sm font-medium text-ink">
         {label}
-        {required && <span className="ml-0.5 text-blush-500">*</span>}
+        {required && <span className="ml-0.5 text-crimson-500">*</span>}
       </label>
       <Popover
         open={open}
@@ -79,7 +79,7 @@ const DatePickerField: React.FC<DatePickerFieldProps> = ({
             className={[
               'relative flex w-full items-center justify-between gap-2 rounded-xl border bg-surface-1 px-3 py-2 text-left text-sm transition-all duration-150',
               'focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30',
-              error ? 'border-blush-500' : 'border-border-subtle',
+              error ? 'border-crimson-500' : 'border-border-subtle',
               displayValue ? 'text-ink' : 'text-ink-faint',
             ].join(' ')}
           >
@@ -119,7 +119,7 @@ const DatePickerField: React.FC<DatePickerFieldProps> = ({
           }}
         />
       </Popover>
-      {error && <p className="mt-1 text-xs text-blush-700">{error}</p>}
+      {error && <p className="mt-1 text-xs text-crimson-700">{error}</p>}
     </div>
   );
 };

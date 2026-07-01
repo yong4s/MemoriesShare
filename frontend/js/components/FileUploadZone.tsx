@@ -147,7 +147,7 @@ const FileUploadZone = ({ eventUuid, albumUuid, userId, onUploadComplete }: File
   return (
     <div className="space-y-3">
       <div
-        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all duration-200 ${isDragOver ? 'border-brand-500 bg-brand-50' : 'border-zinc-300 hover:border-zinc-400'}`}
+        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all duration-200 ${isDragOver ? 'border-brand-500 bg-brand-50' : 'border-border-strong hover:border-brand-400'}`}
         onDragOver={(dragEvent) => {
           dragEvent.preventDefault();
           setIsDragOver(true);
@@ -155,30 +155,30 @@ const FileUploadZone = ({ eventUuid, albumUuid, userId, onUploadComplete }: File
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
       >
-        <CloudUpload className={`mb-3 h-10 w-10 ${isDragOver ? 'text-brand-500' : 'text-zinc-400'}`} />
-        <p className="mb-2 text-sm text-zinc-600">Drag and drop files here, or</p>
+        <CloudUpload className={`mb-3 h-10 w-10 ${isDragOver ? 'text-brand-500' : 'text-ink-faint'}`} />
+        <p className="mb-2 text-sm text-ink-muted">Drag and drop files here, or</p>
         <Button size="sm" variant="secondary" onClick={() => inputRef.current?.click()}>
           Browse Files
         </Button>
-        <p className="mt-2 text-xs text-zinc-400">JPG, PNG, GIF, PDF, MP3, MP4, MOV</p>
+        <p className="mt-2 text-xs text-ink-faint">JPG, PNG, GIF, PDF, MP3, MP4, MOV</p>
         <input ref={inputRef} className="hidden" type="file" multiple accept={ACCEPT_STRING} onChange={handleInputChange} />
       </div>
 
       {uploads.length > 0 && (
         <div className="space-y-2">
           {uploads.map((item) => (
-            <div key={item.id} className="rounded-lg border border-zinc-200 bg-white px-3 py-2.5">
+            <div key={item.id} className="rounded-lg border border-border-subtle bg-surface-1 px-3 py-2.5">
               <div className="flex items-center justify-between text-sm">
-                <span className="truncate text-slate-800">{item.file.name}</span>
+                <span className="truncate text-ink">{item.file.name}</span>
                 <span className="ml-2 flex shrink-0 items-center gap-1.5 text-xs font-medium">
                   {statusIcon(item)}
-                  <span className={item.status === 'done' ? 'text-emerald-600' : item.status === 'error' ? 'text-red-600' : 'text-zinc-500'}>
+                  <span className={item.status === 'done' ? 'text-emerald-600' : item.status === 'error' ? 'text-red-600' : 'text-ink-muted'}>
                     {item.status === 'uploading' ? `${item.progress}%` : item.status === 'confirming' ? 'Confirming...' : item.status === 'done' ? 'Done' : item.status === 'error' ? 'Failed' : 'Pending'}
                   </span>
                 </span>
               </div>
               {(item.status === 'uploading' || item.status === 'confirming') && (
-                <div className="mt-1.5 h-1.5 rounded-full bg-zinc-100">
+                <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
                   <div className="h-1.5 rounded-full bg-brand-600 transition-all duration-300" style={{ width: `${item.progress}%` }} />
                 </div>
               )}
@@ -188,7 +188,7 @@ const FileUploadZone = ({ eventUuid, albumUuid, userId, onUploadComplete }: File
             </div>
           ))}
           {hasFinished && (
-            <button className="text-xs text-zinc-500 hover:text-zinc-700 transition-colors" type="button" onClick={clearCompleted}>
+            <button className="text-xs text-ink-muted hover:text-ink transition-colors" type="button" onClick={clearCompleted}>
               Clear completed
             </button>
           )}

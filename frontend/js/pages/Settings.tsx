@@ -123,39 +123,39 @@ const Settings = () => {
 
       <div className="space-y-6">
         <Card padding="lg">
-          <div className="mb-4 flex items-center gap-2 text-slate-800">
+          <div className="mb-4 flex items-center gap-2 text-ink">
             <UserCircle className="h-5 w-5 text-brand-600" />
             <h2 className="text-lg font-semibold">Account</h2>
           </div>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-zinc-500">Email</dt>
-              <dd className="flex items-center gap-2 font-medium text-slate-900">
-                <Mail className="h-4 w-4 text-zinc-400" />
+              <dt className="text-ink-muted">Email</dt>
+              <dd className="flex items-center gap-2 font-medium text-ink">
+                <Mail className="h-4 w-4 text-ink-faint" />
                 {email || '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Display name</dt>
-              <dd className="font-medium text-slate-900">{displayName || '—'}</dd>
+              <dt className="text-ink-muted">Display name</dt>
+              <dd className="font-medium text-ink">{displayName || '—'}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Last password change</dt>
-              <dd className="font-medium text-slate-900">{lastChangedLabel}</dd>
+              <dt className="text-ink-muted">Last password change</dt>
+              <dd className="font-medium text-ink">{lastChangedLabel}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Has password</dt>
-              <dd className="font-medium text-slate-900">{hasPassword ? 'Yes' : 'No'}</dd>
+              <dt className="text-ink-muted">Has password</dt>
+              <dd className="font-medium text-ink">{hasPassword ? 'Yes' : 'No'}</dd>
             </div>
           </dl>
         </Card>
 
         <Card padding="lg">
-          <div className="mb-4 flex items-center gap-2 text-slate-800">
+          <div className="mb-4 flex items-center gap-2 text-ink">
             <ShieldCheck className="h-5 w-5 text-brand-600" />
             <h2 className="text-lg font-semibold">Preferred sign-in method</h2>
           </div>
-          <p className="mb-3 text-sm text-zinc-500">
+          <p className="mb-3 text-sm text-ink-muted">
             We remember your choice so your login screen shows the right form first.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -163,20 +163,20 @@ const Settings = () => {
               className={`flex-1 rounded-lg border px-4 py-3 text-left text-sm transition ${
                 preferred === 'passwordless'
                   ? 'border-brand-500 bg-brand-50 text-brand-900'
-                  : 'border-zinc-200 hover:border-zinc-300'
+                  : 'border-border-subtle hover:border-border-strong'
               }`}
               disabled={preferenceBusy}
               onClick={() => onChangePreference('passwordless')}
               type="button"
             >
               <div className="font-medium">Passwordless code</div>
-              <div className="text-xs text-zinc-500">Get a 6-digit code by email each time.</div>
+              <div className="text-xs text-ink-muted">Get a 6-digit code by email each time.</div>
             </button>
             <button
               className={`flex-1 rounded-lg border px-4 py-3 text-left text-sm transition ${
                 preferred === 'password'
                   ? 'border-brand-500 bg-brand-50 text-brand-900'
-                  : 'border-zinc-200 hover:border-zinc-300'
+                  : 'border-border-subtle hover:border-border-strong'
               } ${!hasPassword ? 'cursor-not-allowed opacity-50' : ''}`}
               disabled={preferenceBusy || !hasPassword}
               onClick={() => onChangePreference('password')}
@@ -184,7 +184,7 @@ const Settings = () => {
               type="button"
             >
               <div className="font-medium">Password</div>
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-ink-muted">
                 {hasPassword ? 'Enter your password directly.' : 'Set a password below to enable.'}
               </div>
             </button>
@@ -197,11 +197,11 @@ const Settings = () => {
         </Card>
 
         <Card padding="lg">
-          <div className="mb-4 flex items-center gap-2 text-slate-800">
+          <div className="mb-4 flex items-center gap-2 text-ink">
             <Lock className="h-5 w-5 text-brand-600" />
             <h2 className="text-lg font-semibold">{hasPassword ? 'Change password' : 'Set a password'}</h2>
           </div>
-          <p className="mb-4 text-sm text-zinc-500">
+          <p className="mb-4 text-sm text-ink-muted">
             {hasPassword
               ? 'You can still sign in with a passwordless code after changing your password.'
               : 'Adding a password is optional — passwordless sign-in will keep working either way.'}

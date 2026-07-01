@@ -24,13 +24,13 @@ let toastId = 0;
 
 const variantStyles: Record<ToastVariant, string> = {
   success: 'border-sage-300/60 bg-sage-100/90 text-sage-700',
-  error: 'border-blush-300/60 bg-blush-100/90 text-blush-700',
+  error: 'border-crimson-300/60 bg-crimson-100/90 text-crimson-700',
   info: 'border-brand-200 bg-brand-50 text-brand-700',
 };
 
 const variantIcons: Record<ToastVariant, React.ReactNode> = {
   success: <CheckCircle className="h-5 w-5 text-sage-500" />,
-  error: <AlertCircle className="h-5 w-5 text-blush-500" />,
+  error: <AlertCircle className="h-5 w-5 text-crimson-500" />,
   info: <Info className="h-5 w-5 text-brand-500" />,
 };
 

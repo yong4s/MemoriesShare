@@ -5,71 +5,71 @@
 
 /* =========================================================================
  * Theme tokens — runtime CSS custom properties
- * Light theme = warm cream + soft lavender + pastel accents
- * Dark  theme = deep plum-ink + glowing lavender + muted pastels
+ * Light theme = cool slate off-white + blue brand + emerald/amber/red accents
+ * Dark  theme = graphite surfaces + brightened blue brand + muted accents
  * ======================================================================= */
 
 :root {
   color-scheme: light;
 
-  /* Surfaces */
-  --surface-0: #fbf6f0;   /* page background — warm cream */
+  /* Surfaces — cool slate off-white */
+  --surface-0: #f6f7f9;   /* page background */
   --surface-1: #ffffff;   /* primary card */
-  --surface-2: #f5ecdf;   /* elevated card / tinted panel */
-  --surface-3: #efe3d0;   /* hover / inset */
-  --surface-glass: rgba(255, 255, 255, 0.62);
-  --surface-glass-strong: rgba(255, 255, 255, 0.82);
+  --surface-2: #f1f3f5;   /* elevated card / tinted panel */
+  --surface-3: #e9ecef;   /* hover / inset */
+  --surface-glass: rgba(255, 255, 255, 0.65);
+  --surface-glass-strong: rgba(255, 255, 255, 0.85);
 
-  /* Ink (typography) */
-  --ink-1: #2a2130;       /* body text */
-  --ink-2: #544858;       /* muted */
-  --ink-3: #8a7b91;       /* faint */
+  /* Ink (typography) — slate */
+  --ink-1: #0f172a;       /* body text */
+  --ink-2: #475569;       /* muted */
+  --ink-3: #94a3b8;       /* faint */
   --ink-inverse: #ffffff;
 
   /* Borders */
-  --border-subtle: rgba(42, 33, 48, 0.08);
-  --border-strong: rgba(42, 33, 48, 0.16);
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.14);
 
-  /* Shadows — soft, low opacity, warm tint */
-  --shadow-sm: 0 1px 2px 0 rgba(124, 95, 160, 0.08);
-  --shadow-md: 0 4px 14px -2px rgba(124, 95, 160, 0.12), 0 2px 4px -2px rgba(124, 95, 160, 0.08);
-  --shadow-lg: 0 18px 40px -12px rgba(124, 95, 160, 0.22), 0 4px 10px -4px rgba(124, 95, 160, 0.12);
-  --shadow-glow: 0 0 0 3px rgba(165, 126, 239, 0.18);
+  /* Shadows — neutral slate tint */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px -2px rgba(15, 23, 42, 0.10), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 18px 40px -12px rgba(15, 23, 42, 0.18), 0 4px 10px -4px rgba(15, 23, 42, 0.10);
+  --shadow-glow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 
-  /* Mesh gradient stops for hero backgrounds */
-  --mesh-a: #f7e6d9;
-  --mesh-b: #e8dbff;
-  --mesh-c: #dfe9d8;
-  --mesh-d: #fde2d3;
+  /* Mesh gradient stops — cool slate/blue */
+  --mesh-a: #eaf1fb;
+  --mesh-b: #e4eaf2;
+  --mesh-c: #dce7f5;
+  --mesh-d: #eef2f7;
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --surface-0: #141018;
-  --surface-1: #1d1724;
-  --surface-2: #241c2d;
-  --surface-3: #2e2538;
-  --surface-glass: rgba(29, 23, 36, 0.58);
-  --surface-glass-strong: rgba(29, 23, 36, 0.82);
+  --surface-0: #0f1115;
+  --surface-1: #17191f;
+  --surface-2: #1e212a;
+  --surface-3: #262a34;
+  --surface-glass: rgba(23, 25, 31, 0.60);
+  --surface-glass-strong: rgba(23, 25, 31, 0.82);
 
-  --ink-1: #f3eef9;
-  --ink-2: #c6bcd4;
-  --ink-3: #8a7fa2;
-  --ink-inverse: #1a1321;
+  --ink-1: #e7e9ee;
+  --ink-2: #a9b1bd;
+  --ink-3: #737b88;
+  --ink-inverse: #0f1115;
 
-  --border-subtle: rgba(243, 238, 249, 0.08);
-  --border-strong: rgba(243, 238, 249, 0.16);
+  --border-subtle: rgba(231, 233, 238, 0.08);
+  --border-strong: rgba(231, 233, 238, 0.16);
 
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 6px 20px -4px rgba(0, 0, 0, 0.45), 0 3px 6px -3px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 22px 48px -14px rgba(0, 0, 0, 0.6), 0 6px 14px -6px rgba(0, 0, 0, 0.45);
-  --shadow-glow: 0 0 0 3px rgba(189, 157, 255, 0.25);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 6px 20px -4px rgba(0, 0, 0, 0.50), 0 3px 6px -3px rgba(0, 0, 0, 0.40);
+  --shadow-lg: 0 22px 48px -14px rgba(0, 0, 0, 0.60), 0 6px 14px -6px rgba(0, 0, 0, 0.50);
+  --shadow-glow: 0 0 0 3px rgba(96, 165, 250, 0.30);
 
-  --mesh-a: #2a1e3d;
-  --mesh-b: #1e2d3d;
-  --mesh-c: #3d2636;
-  --mesh-d: #1f1a2e;
+  --mesh-a: #141a26;
+  --mesh-b: #10151f;
+  --mesh-c: #151b27;
+  --mesh-d: #0f131b;
 }
 
 /* =========================================================================
@@ -80,39 +80,43 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-  /* Brand — Soft Lavender scale (replaces previous indigo brand) */
-  --color-brand-50:  #f7f2ff;
-  --color-brand-100: #ebe0ff;
-  --color-brand-200: #d7c2ff;
-  --color-brand-300: #bd9dff;
-  --color-brand-400: #a57eef;
-  --color-brand-500: #8c60e0;
-  --color-brand-600: #7547c9;
-  --color-brand-700: #5f39a6;
-  --color-brand-800: #4b2e83;
-  --color-brand-900: #3a2466;
-  --color-brand-950: #231642;
+  /* Brand — Tailwind blue scale */
+  --color-brand-50:  #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
+  --color-brand-950: #172554;
 
-  /* Pastel accents */
-  --color-peach-100: #ffe9de;
-  --color-peach-300: #ffc5aa;
-  --color-peach-500: #f4a07f;
-  --color-peach-700: #c26a48;
+  /* Accents — coherent modern, non-pink set */
+  /* peach → teal (cool secondary: moderator / stat accent) */
+  --color-peach-100: #ccfbf1;
+  --color-peach-300: #5eead4;
+  --color-peach-500: #14b8a6;
+  --color-peach-700: #0f766e;
 
-  --color-sage-100: #e4efe3;
-  --color-sage-300: #b8d4b9;
-  --color-sage-500: #86b389;
-  --color-sage-700: #557a59;
+  /* sage → emerald (success) */
+  --color-sage-100: #d1fae5;
+  --color-sage-300: #6ee7b7;
+  --color-sage-500: #10b981;
+  --color-sage-700: #047857;
 
-  --color-blush-100: #fce4ea;
-  --color-blush-300: #f5bac6;
-  --color-blush-500: #e88aa0;
-  --color-blush-700: #b8566f;
+  /* crimson → red (danger / error) */
+  --color-crimson-100: #fee2e2;
+  --color-crimson-300: #fca5a5;
+  --color-crimson-500: #ef4444;
+  --color-crimson-700: #b91c1c;
 
-  --color-butter-100: #fff4d3;
-  --color-butter-300: #f7dd8e;
-  --color-butter-500: #e6c254;
-  --color-butter-700: #a6872b;
+  /* butter → amber (warning) */
+  --color-butter-100: #fef3c7;
+  --color-butter-300: #fcd34d;
+  --color-butter-500: #f59e0b;
+  --color-butter-700: #b45309;
 }
 
 @theme inline {
@@ -171,7 +175,7 @@
 
   /* Selection */
   ::selection {
-    background: var(--color-brand-300);
+    background: var(--color-brand-500);
     color: var(--ink-inverse);
   }
 

@@ -38,9 +38,9 @@ const InviteGuestModal = ({ eventUuid, onClose, onInvited }: InviteGuestModalPro
   };
 
   return (
-    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-ink/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="animate-slide-up w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+        className="animate-slide-up w-full max-w-md rounded-2xl border border-border-subtle bg-surface-1 p-6 shadow-soft-lg"
         onClick={(clickEvent) => clickEvent.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -48,9 +48,9 @@ const InviteGuestModal = ({ eventUuid, onClose, onInvited }: InviteGuestModalPro
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
               <UserPlus className="h-5 w-5" />
             </div>
-            <h2 className="text-lg font-semibold text-slate-900">Invite Guest</h2>
+            <h2 className="text-lg font-semibold text-ink">Invite Guest</h2>
           </div>
-          <button className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600" type="button" onClick={onClose}>
+          <button className="rounded-lg p-1.5 text-ink-faint transition hover:bg-surface-2 hover:text-ink" type="button" onClick={onClose}>
             <X className="h-5 w-5" />
           </button>
         </div>
