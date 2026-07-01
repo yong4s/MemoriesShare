@@ -2,6 +2,7 @@
 Custom authentication classes for API endpoints
 """
 
+from drf_spectacular.authentication import SessionScheme
 from rest_framework.authentication import SessionAuthentication
 
 
@@ -19,3 +20,14 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         Override to disable CSRF checking for API endpoints.
         """
         return  # Skip CSRF check for API endpoints
+
+
+class CsrfExemptSessionScheme(SessionScheme):
+    """drf-spectacular auth extension for CsrfExemptSessionAuthentication.
+
+    Without it, schema generation warns that it cannot resolve the custom
+    authenticator. Maps to the same cookie security scheme as the standard
+    SessionAuthentication.
+    """
+
+    target_class = 'apps.shared.auth.authentication.CsrfExemptSessionAuthentication'
