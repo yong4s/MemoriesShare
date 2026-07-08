@@ -20,17 +20,17 @@ logger = logging.getLogger(__name__)
 class EventCacheService:
     """
     Domain-specific cache service for Events.
-    
+
     Responsibilities:
     - Event-specific cache key generation
     - Event-specific TTL strategies
     - Event-specific invalidation patterns
     - Event cache warming strategies
-    
+
     Uses BaseCacheClient for actual cache operations.
     """
 
-    def __init__(self, cache_client: BaseCacheClient = None):
+    def __init__(self, cache_client: BaseCacheClient | None = None):
         self.cache = cache_client or base_cache_client
         self.keys = CacheKeys
 
@@ -47,7 +47,7 @@ class EventCacheService:
     def cache_event_detail(self, event_uuid: str, event_data: dict[str, Any], timeout: int = 600) -> bool:
         """
         Cache event detail with business-appropriate TTL.
-        
+
         Default: 10 minutes (events don't change frequently)
         """
         key = self.keys.event_detail(event_uuid)
@@ -70,7 +70,7 @@ class EventCacheService:
     def cache_event_statistics(self, event_uuid: str, statistics: dict[str, Any], timeout: int = 300) -> bool:
         """
         Cache event statistics with shorter TTL.
-        
+
         Default: 5 minutes (statistics change more frequently)
         """
         key = self.keys.event_statistics(event_uuid)
@@ -85,16 +85,24 @@ class EventCacheService:
         return self.cache.delete(key)
 
     # Event Participants Caching
-    def get_cached_event_participants(self, event_uuid: str, role_filter: str = None, rsvp_filter: str = None) -> Any:
+    def get_cached_event_participants(
+        self, event_uuid: str, role_filter: str | None = None, rsvp_filter: str | None = None
+    ) -> Any:
         """Get cached event participants with optional filters."""
         key = self.keys.event_participants(event_uuid, role_filter, rsvp_filter)
         return self.cache.get(key)
 
-    def cache_event_participants(self, event_uuid: str, participants: list[Any],
-                               role_filter: str = None, rsvp_filter: str = None, timeout: int = 180) -> bool:
+    def cache_event_participants(
+        self,
+        event_uuid: str,
+        participants: list[Any],
+        role_filter: str | None = None,
+        rsvp_filter: str | None = None,
+        timeout: int = 180,
+    ) -> bool:
         """
         Cache event participants with filters.
-        
+
         Default: 3 minutes (participant status can change quickly)
         """
         key = self.keys.event_participants(event_uuid, role_filter, rsvp_filter)
@@ -111,15 +119,15 @@ class EventCacheService:
         return count
 
     # Bulk Event Operations
-    def invalidate_event_cache(self, event_uuid: str, cache_types: list[str] = None) -> int:
+    def invalidate_event_cache(self, event_uuid: str, cache_types: list[str] | None = None) -> int:
         """
         Invalidate specific types of event cache or all event cache.
-        
+
         Args:
             event_uuid: Event UUID
             cache_types: List of cache types to invalidate (e.g., ['detail', 'statistics'])
                         If None, invalidates all cache for this event
-        
+
         Returns:
             Number of cache entries deleted
         """
@@ -156,12 +164,12 @@ class EventCacheService:
     def get_or_set_event_detail(self, event_uuid: str, fetch_func, timeout: int = 600) -> Any:
         """
         Get event detail from cache, or fetch and cache if not found.
-        
+
         Args:
             event_uuid: Event UUID
             fetch_func: Function to call if cache miss (should return event data)
             timeout: Cache TTL in seconds
-        
+
         Returns:
             Event data from cache or freshly fetched
         """
@@ -185,12 +193,12 @@ class EventCacheService:
     def get_or_set_event_statistics(self, event_uuid: str, fetch_func, timeout: int = 300) -> Any:
         """
         Get event statistics from cache, or fetch and cache if not found.
-        
+
         Args:
             event_uuid: Event UUID
             fetch_func: Function to call if cache miss (should return statistics data)
             timeout: Cache TTL in seconds
-        
+
         Returns:
             Statistics data from cache or freshly fetched
         """

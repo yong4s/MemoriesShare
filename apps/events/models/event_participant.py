@@ -261,9 +261,6 @@ class EventParticipant(BaseModel):
 
         super().save(*args, **kwargs)
 
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-
     @property
     def display_name(self) -> str:
         """Get display name for this participant"""

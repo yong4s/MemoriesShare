@@ -1,16 +1,9 @@
-import json
 import logging
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
 from urllib.parse import quote
 
 import boto3
@@ -18,21 +11,11 @@ from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 from django.conf import settings
-from django.core.exceptions import ValidationError
 
 from apps.shared.exceptions.exception import S3ServiceError
-from apps.shared.utils.uuid_utils import S3KeyGenerator
-from apps.shared.utils.uuid_utils import UUIDValidator
 from apps.shared.utils.validators import S3KeyValidator
 
 logger = logging.getLogger(__name__)
-
-
-class S3OperationType(Enum):
-    UPLOAD = 'upload'
-    DOWNLOAD = 'download'
-    DELETE = 'delete'
-    BULK_DOWNLOAD = 'bulk_download'
 
 
 @dataclass
@@ -42,15 +25,6 @@ class S3ExpirationConfig:
     delete: int = 300
     bulk_download: int = 7200
     max_expiration: int = 86400
-
-
-@dataclass
-class S3ObjectInfo:
-    key: str
-    size: int
-    last_modified: str
-    etag: str
-    content_type: str | None = None
 
 
 @dataclass
@@ -84,10 +58,6 @@ class IS3Client(ABC):
         pass
 
     @abstractmethod
-    def copy_object(self, **kwargs) -> dict[str, Any]:
-        pass
-
-    @abstractmethod
     def get_object(self, **kwargs) -> dict[str, Any]:
         pass
 
@@ -114,9 +84,6 @@ class BotoS3Client(IS3Client):
 
     def put_object(self, **kwargs) -> dict[str, Any]:
         return self._client.put_object(**kwargs)
-
-    def copy_object(self, **kwargs) -> dict[str, Any]:
-        return self._client.copy_object(**kwargs)
 
     def get_object(self, **kwargs) -> dict[str, Any]:
         return self._client.get_object(**kwargs)
@@ -158,43 +125,6 @@ class S3ConfigurationManager:
         except (NoCredentialsError, BotoCoreError) as e:
             logger.exception(f'Failed to create S3 client: {e}')
             msg = f'S3 client creation failed: {e}'
-            raise S3ServiceError(msg)
-
-
-class S3KeyManager:
-    """Manages S3 key generation and validation."""
-
-    @staticmethod
-    def generate_event_structure(user_uuid: str, event_uuid: str) -> dict[str, str]:
-        """Generate complete S3 structure for an event."""
-        S3KeyManager._validate_uuid(user_uuid, 'user_uuid')
-        S3KeyManager._validate_uuid(event_uuid, 'event_uuid')
-
-        base_prefix = S3KeyGenerator.generate_event_prefix(user_uuid, event_uuid)
-
-        return {'base': f'{base_prefix}/', 'albums': f'{base_prefix}/albums/'}
-
-    @staticmethod
-    def generate_album_paths(user_uuid: str, event_uuid: str, album_uuid: str) -> dict[str, str]:
-        """Generate paths for an album."""
-        S3KeyManager._validate_uuid(user_uuid, 'user_uuid')
-        S3KeyManager._validate_uuid(event_uuid, 'event_uuid')
-        S3KeyManager._validate_uuid(album_uuid, 'album_uuid')
-
-        album_prefix = S3KeyGenerator.generate_album_prefix(user_uuid, event_uuid, album_uuid)
-
-        return {
-            'base': f'{album_prefix}/',
-            'originals': f'{album_prefix}/originals/',
-            'thumbnails': f'{album_prefix}/processed/thumbnails/',
-            'compressed': f'{album_prefix}/processed/compressed/',
-        }
-
-    @staticmethod
-    def _validate_uuid(uuid_value: str, field_name: str) -> None:
-        """Validate UUID format."""
-        if not UUIDValidator.is_valid_uuid(uuid_value):
-            msg = f'Invalid {field_name}: {uuid_value}'
             raise S3ServiceError(msg)
 
 
@@ -277,27 +207,6 @@ class S3URLGenerator:
 
         except ClientError as e:
             error_msg = f'Error generating download URL for {s3_key}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-
-    def generate_delete_url(self, s3_key: str, expires_in: int | None = None) -> str:
-        """Generate presigned delete URL."""
-        self._validate_s3_key(s3_key)
-
-        expires_in = self._normalize_expiration(expires_in, self.config.delete)
-
-        try:
-            url = self.s3_client.generate_presigned_url(
-                'delete_object',
-                Params={'Bucket': self.bucket_name, 'Key': s3_key},
-                ExpiresIn=expires_in,
-            )
-
-            logger.info(f'Generated delete URL for key: {s3_key}, ' f'expires in {expires_in}s')
-            return url
-
-        except ClientError as e:
-            error_msg = f'Error generating delete URL for {s3_key}: {e}'
             logger.exception(error_msg)
             raise S3ServiceError(error_msg)
 
@@ -445,54 +354,6 @@ class S3ObjectManager:
             msg = f'Error getting object metadata: {e}'
             raise S3ServiceError(msg)
 
-    def list_objects_with_prefix(self, prefix: str, max_keys: int | None = 1000) -> list[S3ObjectInfo]:
-        """List objects with given prefix (paginated; pass ``max_keys=None`` for all)."""
-        try:
-            return [
-                S3ObjectInfo(
-                    key=obj['Key'],
-                    size=obj['Size'],
-                    last_modified=obj['LastModified'].isoformat(),
-                    etag=obj['ETag'],
-                )
-                for obj in self._paginate_objects(prefix, max_keys)
-            ]
-
-        except ClientError as e:
-            error_msg = f'Error listing objects with prefix {prefix}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-
-    def copy_object_with_metadata(
-        self,
-        source_key: str,
-        destination_key: str,
-        metadata: dict[str, str] | None = None,
-    ) -> bool:
-        """Copy object with new metadata."""
-        try:
-            copy_source = {'Bucket': self.bucket_name, 'Key': source_key}
-            extra_args = {}
-
-            if metadata:
-                extra_args['Metadata'] = metadata
-                extra_args['MetadataDirective'] = 'REPLACE'
-
-            self.s3_client.copy_object(
-                CopySource=copy_source,
-                Bucket=self.bucket_name,
-                Key=destination_key,
-                **extra_args,
-            )
-
-            logger.info(f'Copied {source_key} to {destination_key}')
-            return True
-
-        except ClientError as e:
-            error_msg = f'Error copying {source_key} to {destination_key}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-
     def download_object(self, s3_key: str) -> bytes:
         """Download object bytes from S3."""
         try:
@@ -572,62 +433,6 @@ class S3FolderManager:
         self.bucket_name = bucket_name
         self.object_manager = object_manager
 
-    def create_folder(self, folder_path: str) -> bool:
-        """Create folder in S3 (empty object with trailing slash)."""
-        try:
-            if not folder_path.endswith('/'):
-                folder_path += '/'
-
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=folder_path,
-                Body=b'',
-                ContentType='application/x-directory',
-            )
-
-            logger.info(f'Created folder: {folder_path}')
-            return True
-
-        except ClientError as e:
-            error_msg = f'Error creating folder {folder_path}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-
-    def folder_exists(self, folder_path: str) -> bool:
-        """Check if folder exists in S3."""
-        try:
-            if not folder_path.endswith('/'):
-                folder_path += '/'
-
-            response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=folder_path, MaxKeys=1)
-
-            return 'Contents' in response or 'CommonPrefixes' in response
-
-        except ClientError as e:
-            logger.exception(f'Error checking folder existence for {folder_path}: {e}')
-            return False
-
-    def create_event_folders(self, user_uuid: str, event_uuid: str) -> bool:
-        """Create all necessary folders for an event."""
-        try:
-            structure = S3KeyManager.generate_event_structure(user_uuid, event_uuid)
-
-            for folder_path in structure.values():
-                if not self.folder_exists(folder_path):
-                    self.create_folder(folder_path)
-
-            logger.info(f'Created all folders for event {event_uuid}')
-            return True
-
-        except (ClientError, BotoCoreError) as e:
-            error_msg = f'AWS error creating event folders for {event_uuid}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-        except Exception as e:
-            error_msg = f'Unexpected error creating event folders for {event_uuid}: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-
     def delete_folder(self, folder_path: str) -> int:
         """Delete a folder and all of its contents (fully paginated and batched).
 
@@ -664,12 +469,6 @@ class OptimizedS3Service:
         self.object_manager = S3ObjectManager(self.s3_client, self.bucket_name)
         self.folder_manager = S3FolderManager(self.s3_client, self.bucket_name, self.object_manager)
 
-    def generate_event_structure(self, user_uuid: str, event_uuid: str) -> dict[str, str]:
-        return S3KeyManager.generate_event_structure(user_uuid, event_uuid)
-
-    def generate_album_paths(self, user_uuid: str, event_uuid: str, album_uuid: str) -> dict[str, str]:
-        return S3KeyManager.generate_album_paths(user_uuid, event_uuid, album_uuid)
-
     def generate_presigned_upload_url(
         self,
         s3_key: str,
@@ -702,38 +501,6 @@ class OptimizedS3Service:
         """
         return self.url_generator.generate_download_url(s3_key, expires_in, filename, response_headers)
 
-    def generate_presigned_delete_url(self, s3_key: str, expires_in: int | None = None) -> str:
-        """Generate presigned delete URL."""
-        return self.url_generator.generate_delete_url(s3_key, expires_in)
-
-    # === BULK OPERATIONS ===
-
-    def generate_bulk_download_urls(self, s3_keys: list[str], expires_in: int | None = None) -> dict[str, str]:
-        """Generate presigned URLs for multiple files."""
-        try:
-            expires_in = expires_in or self.config.bulk_download
-            urls = {}
-
-            for s3_key in s3_keys:
-                if self.object_manager.object_exists(s3_key):
-                    urls[s3_key] = self.url_generator.generate_download_url(s3_key, expires_in)
-                else:
-                    logger.warning(f'Skipping non-existent key: {s3_key}')
-
-            logger.info(f'Generated {len(urls)} bulk download URLs')
-            return urls
-
-        except (ClientError, BotoCoreError) as e:
-            error_msg = f'AWS error generating bulk download URLs: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-        except Exception as e:
-            error_msg = f'Unexpected error generating bulk download URLs: {e}'
-            logger.exception(error_msg)
-            raise S3ServiceError(error_msg)
-
-    # === OBJECT OPERATIONS ===
-
     def object_exists(self, s3_key: str) -> bool:
         """Check if object exists in S3."""
         return self.object_manager.object_exists(s3_key)
@@ -741,19 +508,6 @@ class OptimizedS3Service:
     def get_object_metadata(self, s3_key: str) -> dict[str, Any]:
         """Get object metadata."""
         return self.object_manager.get_object_metadata(s3_key)
-
-    def list_objects_with_prefix(self, prefix: str, max_keys: int = 1000) -> list[S3ObjectInfo]:
-        """List objects with given prefix."""
-        return self.object_manager.list_objects_with_prefix(prefix, max_keys)
-
-    def copy_object_with_metadata(
-        self,
-        source_key: str,
-        destination_key: str,
-        metadata: dict[str, str] | None = None,
-    ) -> bool:
-        """Copy object with new metadata."""
-        return self.object_manager.copy_object_with_metadata(source_key, destination_key, metadata)
 
     def download_object(self, s3_key: str) -> bytes:
         """Download object bytes from S3."""
@@ -770,20 +524,6 @@ class OptimizedS3Service:
     def delete_objects_with_prefix(self, prefix: str) -> int:
         """Delete all objects with given prefix."""
         return self.object_manager.delete_objects_with_prefix(prefix)
-
-    # === FOLDER OPERATIONS ===
-
-    def create_folder(self, folder_path: str) -> bool:
-        """Create folder in S3."""
-        return self.folder_manager.create_folder(folder_path)
-
-    def folder_exists(self, folder_path: str) -> bool:
-        """Check if folder exists in S3."""
-        return self.folder_manager.folder_exists(folder_path)
-
-    def create_event_folders(self, user_uuid: str, event_uuid: str) -> bool:
-        """Create all necessary folders for an event."""
-        return self.folder_manager.create_event_folders(user_uuid, event_uuid)
 
     def delete_folder(self, folder_path: str) -> int:
         """Delete folder and all its contents."""

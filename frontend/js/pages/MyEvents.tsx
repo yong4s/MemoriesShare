@@ -118,14 +118,14 @@ const MyEvents = () => {
       {!isLoading && !errorMessage && (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
-            <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+            <div className="flex rounded-lg border border-border-subtle bg-surface-2 p-1">
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
                     activeTab === tab.key
                       ? 'bg-brand-600 text-white shadow-sm'
-                      : 'text-zinc-500 hover:text-zinc-700'
+                      : 'text-ink-muted hover:text-ink'
                   }`}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
@@ -138,9 +138,9 @@ const MyEvents = () => {
             </div>
 
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
               <input
-                className="rounded-lg border border-zinc-300 pl-9 pr-3 py-2 text-sm transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none"
+                className="rounded-lg border border-border-strong bg-surface-1 pl-9 pr-3 py-2 text-sm text-ink transition-colors placeholder:text-ink-faint focus:border-brand-400 focus:ring-1 focus:ring-brand-400 focus:outline-none"
                 placeholder="Search events..."
                 type="text"
                 value={searchQuery}

@@ -124,7 +124,7 @@ const AlbumDetailPage = () => {
   return (
     <PageLayout>
       <Link
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-700"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-muted transition-colors hover:text-ink"
         to={`/events/${eventUuid}/albums`}
       >
         <ArrowLeft className="h-3.5 w-3.5" />
@@ -146,7 +146,7 @@ const AlbumDetailPage = () => {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
                   <FolderOpen className="h-5 w-5" />
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-950">{album.name}</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-ink">{album.name}</h1>
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <Badge variant={album.is_public ? 'public' : 'private'} />
@@ -179,7 +179,7 @@ const AlbumDetailPage = () => {
           )}
 
           {album.description && (
-            <p className="mb-4 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{album.description}</p>
+            <p className="mb-4 text-sm leading-relaxed text-ink-muted whitespace-pre-wrap">{album.description}</p>
           )}
 
           {/* Stats */}
@@ -192,7 +192,7 @@ const AlbumDetailPage = () => {
           <Card padding="lg">
             <div className="mb-3 flex items-center gap-2">
               <CloudUpload className="h-5 w-5 text-brand-500" />
-              <h3 className="text-lg font-semibold text-slate-900">Upload Files</h3>
+              <h3 className="text-lg font-semibold text-ink">Upload Files</h3>
             </div>
             {user && (
               <FileUploadZone
@@ -212,8 +212,8 @@ const AlbumDetailPage = () => {
           <div className="mt-6">
             <div className="mb-4 flex items-center gap-2">
               <Image className="h-5 w-5 text-brand-500" />
-              <h3 className="text-lg font-semibold text-slate-900">Files</h3>
-              {files.length > 0 && <span className="text-sm text-zinc-400">({files.length})</span>}
+              <h3 className="text-lg font-semibold text-ink">Files</h3>
+              {files.length > 0 && <span className="text-sm text-ink-faint">({files.length})</span>}
             </div>
             {files.length === 0 ? (
               <EmptyState

@@ -1,7 +1,4 @@
 from collections.abc import Callable
-from typing import Any
-from typing import Optional
-from typing import Type
 
 from apps.accounts.cache.user_cache_service import user_cache_service
 from apps.accounts.dal.user_dal import UserDAL
@@ -75,6 +72,7 @@ class Container:
             permission_service=self._service_factories['permission_service'](),
             cache_service=event_cache_service,
             cache_invalidator=self.cache_invalidator(),
+            user_service=self.user_service(),
         )
 
     def user_service(self):
@@ -93,6 +91,9 @@ class Container:
                 s3_service=self._service_factories['s3_service'](),
             ),
             permission_service=self._service_factories['permission_service'](),
+            event_dal=self._dal_factories['event_dal'](),
+            album_dal=self._dal_factories['album_dal'](),
+            user_dal=self._dal_factories['user_dal'](),
         )
 
     def album_service(self):

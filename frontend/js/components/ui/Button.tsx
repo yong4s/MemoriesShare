@@ -13,10 +13,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary: [
-    'bg-gradient-to-r from-brand-500 to-brand-600 text-white',
-    'hover:from-brand-600 hover:to-brand-700 hover:shadow-soft-md hover:-translate-y-px',
+    'bg-gradient-to-r from-brand-600 to-brand-700 text-white',
+    'hover:from-brand-700 hover:to-brand-800 hover:shadow-soft-md hover:-translate-y-px',
     'active:translate-y-0 active:shadow-soft-sm',
-    'disabled:from-brand-200 disabled:to-brand-300 disabled:shadow-none disabled:hover:translate-y-0',
+    'disabled:from-brand-300 disabled:to-brand-400 disabled:shadow-none disabled:hover:translate-y-0',
     'shadow-soft-sm',
   ].join(' '),
   secondary: [
@@ -25,9 +25,9 @@ const variantStyles: Record<ButtonVariant, string> = {
     'disabled:opacity-60 shadow-soft-sm',
   ].join(' '),
   danger: [
-    'bg-gradient-to-r from-blush-500 to-blush-700 text-white',
+    'bg-gradient-to-r from-crimson-500 to-crimson-700 text-white',
     'hover:shadow-soft-md hover:-translate-y-px active:translate-y-0',
-    'disabled:from-blush-300 disabled:to-blush-300 disabled:shadow-none',
+    'disabled:from-crimson-300 disabled:to-crimson-300 disabled:shadow-none',
     'shadow-soft-sm',
   ].join(' '),
   ghost: 'text-ink-muted hover:bg-surface-2 hover:text-ink disabled:opacity-60',

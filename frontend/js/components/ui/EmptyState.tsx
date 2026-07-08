@@ -17,7 +17,7 @@ interface EmptyStateProps {
 
 const EmptyState = ({ title, message, action, icon }: EmptyStateProps) => (
   <div className="animate-fade-in flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-strong bg-surface-1/40 py-14 text-center">
-    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 via-peach-100 to-blush-100 text-brand-600 shadow-soft-sm">
+    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-50 to-brand-100 text-brand-600 shadow-soft-sm">
       {icon ?? <Inbox className="h-7 w-7" />}
     </div>
     <h3 className="text-lg font-semibold text-ink">{title}</h3>

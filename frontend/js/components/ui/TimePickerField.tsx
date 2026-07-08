@@ -74,7 +74,7 @@ const TimePickerField: React.FC<TimePickerFieldProps> = ({
             'w-full rounded-xl border bg-surface-1 px-3 py-2 text-sm text-ink',
             'transition-all duration-150 placeholder:text-ink-faint',
             'focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30',
-            error ? 'border-blush-500' : 'border-border-subtle',
+            error ? 'border-crimson-500' : 'border-border-subtle',
           ].join(' ')}
         />
         <Popover
@@ -145,7 +145,7 @@ const TimePickerField: React.FC<TimePickerFieldProps> = ({
           </div>
         </Popover>
       </div>
-      {error && <p className="mt-1 text-xs text-blush-700">{error}</p>}
+      {error && <p className="mt-1 text-xs text-crimson-700">{error}</p>}
     </div>
   );
 };

@@ -42,10 +42,10 @@ const TopNav = () => {
         <div className="flex items-center justify-between px-4 py-2.5">
           <div className="flex items-center gap-4">
             <NavLink className="group flex items-center gap-2 font-semibold tracking-tight text-ink" to="/">
-              <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 via-blush-300 to-peach-300 shadow-soft-sm transition-transform duration-300 group-hover:rotate-6 group-hover:scale-105">
+              <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-soft-sm transition-transform duration-300 group-hover:rotate-6 group-hover:scale-105">
                 <Camera className="h-4 w-4 text-white" strokeWidth={2.2} />
               </span>
-              <span className="bg-gradient-to-r from-brand-600 via-brand-500 to-blush-500 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-brand-600 via-brand-500 to-brand-400 bg-clip-text text-transparent">
                 Media Flow
               </span>
             </NavLink>
@@ -70,7 +70,7 @@ const TopNav = () => {
             {isAuthenticated ? (
               <>
                 <div className="hidden items-center gap-3 sm:flex">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-blush-300 text-sm font-semibold text-white shadow-soft-sm">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-semibold text-white shadow-soft-sm">
                     {userInitial}
                   </div>
                   <span className="max-w-[10rem] truncate text-sm text-ink-muted">
@@ -81,7 +81,7 @@ const TopNav = () => {
                     Settings
                   </NavLink>
                   <button
-                    className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-all duration-150 hover:bg-blush-100 hover:text-blush-700"
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-all duration-150 hover:bg-crimson-100 hover:text-crimson-700"
                     type="button"
                     onClick={onLogout}
                   >
@@ -109,7 +109,7 @@ const TopNav = () => {
         {mobileMenuOpen && isAuthenticated && (
           <div className="animate-fade-in border-t border-border-subtle px-4 pb-3 pt-2 sm:hidden">
             <div className="mb-2 flex items-center gap-3 border-b border-border-subtle pb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-blush-300 text-sm font-semibold text-white shadow-soft-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-semibold text-white shadow-soft-sm">
                 {userInitial}
               </div>
               <span className="truncate text-sm text-ink">{user?.display_name || user?.email}</span>
@@ -139,7 +139,7 @@ const TopNav = () => {
               Settings
             </NavLink>
             <button
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition hover:bg-blush-100 hover:text-blush-700"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition hover:bg-crimson-100 hover:text-crimson-700"
               type="button"
               onClick={onLogout}
             >

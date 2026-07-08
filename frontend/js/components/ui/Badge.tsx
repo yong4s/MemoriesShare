@@ -22,7 +22,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   moderator: 'bg-peach-100 text-peach-700 ring-1 ring-peach-300/60',
   guest: 'bg-surface-2 text-ink-muted ring-1 ring-border-subtle',
   accepted: 'bg-sage-100 text-sage-700 ring-1 ring-sage-300/60',
-  declined: 'bg-blush-100 text-blush-700 ring-1 ring-blush-300/60',
+  declined: 'bg-crimson-100 text-crimson-700 ring-1 ring-crimson-300/60',
   pending: 'bg-butter-100 text-butter-700 ring-1 ring-butter-300/60',
   maybe: 'bg-brand-50 text-brand-600 ring-1 ring-brand-200',
   public: 'bg-sage-100 text-sage-700 ring-1 ring-sage-300/60',

@@ -6,6 +6,7 @@ from django.utils.html import format_html
 
 from apps.events.models import Event
 from apps.events.models import EventParticipant
+from apps.events.services.event_service import build_event_s3_prefix
 
 User = get_user_model()
 
@@ -129,6 +130,8 @@ class EventAdmin(admin.ModelAdmin):
         is_new = not change
         super().save_model(request, obj, form, change)
         if is_new:
+            obj.s3_prefix = build_event_s3_prefix(request.user.user_uuid, obj.event_uuid)
+            obj.save(update_fields=['s3_prefix'])
             EventParticipant.objects.get_or_create(
                 event=obj,
                 user=request.user,

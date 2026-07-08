@@ -1,6 +1,7 @@
 import logging
 from functools import cached_property
 
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -27,6 +28,7 @@ class BaseLegacyMediaFileAPIView(BaseMediaFileAPIView):
 class FileUploadedAPIView(BaseLegacyMediaFileAPIView):
     """Confirm successful file upload (legacy endpoint still used by the frontend)."""
 
+    @extend_schema(request=LegacyUploadedConfirmSerializer, responses=OpenApiTypes.OBJECT)
     def post(self, request):
         serializer = LegacyUploadedConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

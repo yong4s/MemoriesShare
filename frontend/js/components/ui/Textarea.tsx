@@ -24,11 +24,11 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
             'transition-all duration-150 placeholder:text-ink-faint',
             'focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400/30',
             'disabled:cursor-not-allowed disabled:bg-surface-2',
-            error ? 'border-blush-500' : 'border-border-subtle',
+            error ? 'border-crimson-500' : 'border-border-subtle',
           ].join(' ')}
           {...props}
         />
-        {error && <p className="mt-1 text-xs text-blush-700">{error}</p>}
+        {error && <p className="mt-1 text-xs text-crimson-700">{error}</p>}
       </div>
     );
   },

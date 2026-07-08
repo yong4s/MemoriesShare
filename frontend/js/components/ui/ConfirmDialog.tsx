@@ -38,7 +38,7 @@ const ConfirmDialog = ({
         <div
           className={`shrink-0 rounded-xl p-2.5 ${
             variant === 'danger'
-              ? 'bg-blush-100 text-blush-700'
+              ? 'bg-crimson-100 text-crimson-700'
               : 'bg-brand-100 text-brand-700'
           }`}
         >

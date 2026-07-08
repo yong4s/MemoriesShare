@@ -1,6 +1,7 @@
 import logging
 from functools import cached_property
 
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -26,6 +27,11 @@ class MediaFileListAPIView(BaseMediaFileAPIView):
     def service(self):
         return get_container().mediafile_service()
 
+    @extend_schema(
+        operation_id='mediafiles_list',
+        parameters=[MediaFileListQuerySerializer],
+        responses=OpenApiTypes.OBJECT,
+    )
     def get(self, request):
         query_serializer = MediaFileListQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
@@ -39,6 +45,10 @@ class MediaFileListAPIView(BaseMediaFileAPIView):
 
         return Response({'files': files}, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        request=MediaFileUploadRequestSerializer,
+        responses=MediaFileUploadResponseSerializer,
+    )
     def post(self, request):
         serializer = MediaFileUploadRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -65,6 +75,7 @@ class MediaFileAPIView(BaseMediaFileAPIView):
     def service(self):
         return get_container().mediafile_service()
 
+    @extend_schema(operation_id='mediafiles_retrieve', responses=OpenApiTypes.OBJECT)
     def get(self, request, file_uuid):
         if request.query_params.get('download') == 'true':
             result = self.service.generate_download_url(str(file_uuid), request.user.id)
@@ -73,6 +84,7 @@ class MediaFileAPIView(BaseMediaFileAPIView):
 
         return Response(result, status=status.HTTP_200_OK)
 
+    @extend_schema(request=MediaFileUpdateSerializer, responses=OpenApiTypes.OBJECT)
     def put(self, request, file_uuid):
         serializer = MediaFileUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -85,6 +97,7 @@ class MediaFileAPIView(BaseMediaFileAPIView):
 
         return Response(result, status=status.HTTP_200_OK)
 
+    @extend_schema(responses={204: None})
     def delete(self, request, file_uuid):
         self.service.delete_file(str(file_uuid), request.user.id)
         return Response(status=status.HTTP_204_NO_CONTENT)

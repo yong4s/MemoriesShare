@@ -1,11 +1,8 @@
-"""Events services package."""
+"""Events services package.
 
-from apps.events.services.event_service import EventService
-from apps.events.services.invite_link_service import InviteLinkService
-from apps.events.services.permission_service import EventPermissionService
-
-__all__ = [
-    'EventPermissionService',
-    'EventService',
-    'InviteLinkService',
-]
+Import services from their submodules directly (e.g.
+``from apps.events.services.event_service import EventService``). This package
+deliberately avoids eager re-exports: ``event_service`` imports ``events.tasks``,
+so re-exporting it here would make importing any sibling submodule (e.g. the
+analytics singleton from a Celery task) pull in a tasks ↔ service import cycle.
+"""

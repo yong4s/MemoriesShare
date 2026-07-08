@@ -29,7 +29,7 @@ const FILE_TYPE_COLORS: Record<string, string> = {
   image: 'bg-emerald-100 text-emerald-700',
   video: 'bg-blue-100 text-blue-700',
   audio: 'bg-amber-100 text-amber-700',
-  application: 'bg-zinc-100 text-zinc-700',
+  application: 'bg-surface-2 text-ink-muted',
 };
 
 const getFileIcon = (fileType: string) => {
@@ -58,9 +58,9 @@ const MediaFileCard = ({ file, canModify, onDelete, onDownload, onPreview }: Med
   const hasThumbnail = isImage && file.thumbnail_url && !imgError;
 
   return (
-    <div className="group rounded-xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md overflow-hidden">
+    <div className="group rounded-xl border border-border-subtle bg-surface-1 shadow-soft-sm transition-all duration-200 hover:shadow-soft-md overflow-hidden">
       <div
-        className={`relative flex h-40 items-center justify-center ${hasThumbnail ? 'bg-zinc-100' : isImage ? 'bg-gradient-to-br from-emerald-50 to-emerald-100' : 'bg-gradient-to-br from-zinc-50 to-zinc-100'}`}
+        className={`relative flex h-40 items-center justify-center ${hasThumbnail ? 'bg-surface-2' : isImage ? 'bg-gradient-to-br from-emerald-50 to-emerald-100' : 'bg-gradient-to-br from-surface-2 to-surface-3'}`}
         onClick={() => hasThumbnail && onPreview?.(file.file_uuid)}
         role={hasThumbnail ? 'button' : undefined}
         tabIndex={hasThumbnail ? 0 : undefined}
@@ -79,14 +79,14 @@ const MediaFileCard = ({ file, canModify, onDelete, onDownload, onPreview }: Med
             </div>
           </>
         ) : (
-          <div className="text-zinc-400">
+          <div className="text-ink-faint">
             {getFileIcon(file.file_type)}
           </div>
         )}
       </div>
 
       <div className="p-3">
-        <p className="truncate text-sm font-medium text-slate-800" title={file.file_name}>
+        <p className="truncate text-sm font-medium text-ink" title={file.file_name}>
           {file.file_name}
         </p>
 

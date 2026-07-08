@@ -37,8 +37,8 @@ const AVATAR_COLORS = [
   'bg-emerald-100 text-emerald-700',
   'bg-amber-100 text-amber-700',
   'bg-sky-100 text-sky-700',
-  'bg-violet-100 text-violet-700',
-  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+  'bg-cyan-100 text-cyan-700',
 ];
 
 const getAvatarColor = (index: number): string => AVATAR_COLORS[index % AVATAR_COLORS.length];
@@ -67,10 +67,10 @@ const ParticipantList = ({ eventUuid, canModify, showEmails, onInviteClick }: Pa
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">
+        <h3 className="text-lg font-semibold text-ink">
           Participants
           {!isLoading && participants.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-zinc-400">({participants.length})</span>
+            <span className="ml-2 text-sm font-normal text-ink-faint">({participants.length})</span>
           )}
         </h3>
         {canModify && onInviteClick && (
@@ -80,29 +80,29 @@ const ParticipantList = ({ eventUuid, canModify, showEmails, onInviteClick }: Pa
         )}
       </div>
 
-      {isLoading && <p className="text-sm text-zinc-500">Loading participants...</p>}
+      {isLoading && <p className="text-sm text-ink-muted">Loading participants...</p>}
       {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
       {!isLoading && !errorMessage && participants.length === 0 && (
-        <p className="text-sm text-zinc-500">No participants yet.</p>
+        <p className="text-sm text-ink-muted">No participants yet.</p>
       )}
 
       {!isLoading && !errorMessage && participants.length > 0 && (
-        <div className="divide-y divide-zinc-100">
+        <div className="divide-y divide-border-subtle">
           {participants.map((participant, index) => {
             const name = participant.user_name || participant.guest_name || 'Unknown';
             const initial = name[0]?.toUpperCase() ?? '?';
 
             return (
-              <div key={participant.id} className="flex items-center justify-between py-2.5 transition-colors hover:bg-zinc-50 -mx-4 px-4 first:-mt-1 last:-mb-1">
+              <div key={participant.id} className="flex items-center justify-between py-2.5 transition-colors hover:bg-surface-2 -mx-4 px-4 first:-mt-1 last:-mb-1">
                 <div className="flex items-center gap-3">
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getAvatarColor(index)}`}>
                     {initial}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-800">{name}</p>
+                    <p className="text-sm font-medium text-ink">{name}</p>
                     {showEmails && participant.is_registered_user && (
-                      <p className="text-xs text-zinc-400">{participant.guest_name}</p>
+                      <p className="text-xs text-ink-faint">{participant.guest_name}</p>
                     )}
                   </div>
                 </div>

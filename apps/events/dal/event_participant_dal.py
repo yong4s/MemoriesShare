@@ -11,8 +11,6 @@ from typing import Any
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError
 from django.db import IntegrityError
-from django.db.models import Count
-from django.db.models import Q
 from django.utils import timezone
 
 from apps.events.exceptions import DuplicateParticipantError
@@ -44,65 +42,67 @@ class EventParticipantDAL:
                 user = participation_data.get('user')
                 user_id = user.id if user else 'unknown'
                 logger.warning('Duplicate participant creation attempt for user %s', user_id)
-                raise DuplicateParticipantError(user_identifier=str(user_id))
+                raise DuplicateParticipantError(user_identifier=str(user_id)) from e
             logger.exception('Participant creation failed - integrity error: %s', redacted)
-            raise ValidationError('Participant creation validation failed')
+            raise ValidationError('Participant creation validation failed') from e
         except DjangoValidationError as e:
             logger.exception('Participant creation failed - validation error: %s', redact_secrets(str(e)))
-            raise ValidationError('Participant data validation failed')
+            raise ValidationError('Participant data validation failed') from e
         except DatabaseError as e:
             logger.exception('Participant creation failed - database error: %s', redact_secrets(str(e)))
-            raise ServiceUnavailableError('Database service unavailable')
+            raise ServiceUnavailableError('Database service unavailable') from e
 
     def get_user_participation(self, event: Event, user) -> EventParticipant:
-        """Get user's participation in event with exception translation"""
+        """Raises ParticipantNotFoundError if the user has no participation."""
         try:
             return EventParticipant.objects.get(event=event, user=user)
-        except EventParticipant.DoesNotExist:
+        except EventParticipant.DoesNotExist as e:
             logger.debug('Participant not found for user %s in event %s', user.id, event.event_uuid)
-            raise ParticipantNotFoundError(participant_identifier=f'user_{user.id}')
+            raise ParticipantNotFoundError(participant_identifier=f'user_{user.id}') from e
         except DatabaseError as e:
             logger.exception('Database error while fetching participant: %s', redact_secrets(str(e)))
-            raise ServiceUnavailableError('Database service unavailable')
+            raise ServiceUnavailableError('Database service unavailable') from e
 
     def get_user_participation_by_id(self, event: Event, user_id: int) -> EventParticipant | None:
-        """Get user's participation by user ID - returns None if not found (no exception)"""
+        """Returns None if not found (no exception)."""
         try:
             return EventParticipant.objects.get(event=event, user_id=user_id)
         except EventParticipant.DoesNotExist:
             return None
         except DatabaseError as e:
             logger.exception('Database error while fetching participant by ID: %s', redact_secrets(str(e)))
-            raise ServiceUnavailableError('Database service unavailable')
-
-    def get_user_participation_by_id_strict(self, event: Event, user_id: int) -> EventParticipant:
-        """Get user's participation by user ID - raises exception if not found"""
-        try:
-            return EventParticipant.objects.get(event=event, user_id=user_id)
-        except EventParticipant.DoesNotExist:
-            logger.debug('Participant not found for user %s in event %s', user_id, event.event_uuid)
-            raise ParticipantNotFoundError(participant_identifier=f'user_{user_id}')
-        except DatabaseError as e:
-            logger.exception('Database error while fetching participant by ID: %s', redact_secrets(str(e)))
-            raise ServiceUnavailableError('Database service unavailable')
+            raise ServiceUnavailableError('Database service unavailable') from e
 
     def get_participant_by_pk(self, event: Event, participant_pk: int) -> EventParticipant:
-        """Get a single participant by primary key within an event. Raises ParticipantNotFoundError."""
+        """Raises ParticipantNotFoundError if not found in this event."""
         try:
             return EventParticipant.objects.select_related('user').get(event=event, pk=participant_pk)
-        except EventParticipant.DoesNotExist:
-            raise ParticipantNotFoundError(participant_identifier=str(participant_pk))
+        except EventParticipant.DoesNotExist as e:
+            raise ParticipantNotFoundError(participant_identifier=str(participant_pk)) from e
         except DatabaseError as e:
             logger.exception('Database error while fetching participant by PK: %s', redact_secrets(str(e)))
-            raise ServiceUnavailableError('Database service unavailable')
+            raise ServiceUnavailableError('Database service unavailable') from e
+
+    def get_participant_for_invitation(self, participant_pk: int) -> EventParticipant | None:
+        """Participant with event/user/participants prefetched for the invite email; None if gone."""
+        try:
+            return (
+                EventParticipant.objects.select_related('event', 'user')
+                .prefetch_related('event__participants_through__user')
+                .get(pk=participant_pk)
+            )
+        except EventParticipant.DoesNotExist:
+            return None
+        except DatabaseError as e:
+            logger.exception('Database error while fetching participant for invitation: %s', redact_secrets(str(e)))
+            raise ServiceUnavailableError('Database service unavailable') from e
+
+    def mark_invitation_sent(self, participant_pk: int) -> int:
+        return EventParticipant.objects.filter(pk=participant_pk).update(invitation_sent_at=timezone.now())
 
     def is_user_participant(self, event: Event, user) -> bool:
         """Check if user is participant in event"""
         return EventParticipant.objects.filter(event=event, user=user).exists()
-
-    def is_user_participant_by_id(self, event: Event, user_id: int) -> bool:
-        """Check if user is participant by user ID"""
-        return EventParticipant.objects.filter(event=event, user_id=user_id).exists()
 
     def get_event_participants(
         self,
@@ -122,51 +122,13 @@ class EventParticipantDAL:
         return list(queryset.order_by('created_at'))
 
     def update_participant_rsvp(self, participation: EventParticipant, rsvp_status: str) -> EventParticipant:
-        """Update participant RSVP status"""
+        """Update RSVP status and stamp responded_at."""
         participation.rsvp_status = rsvp_status
-        participation.save(update_fields=['rsvp_status', 'updated_at'])
+        participation.responded_at = timezone.now()
+        participation.save(update_fields=['rsvp_status', 'responded_at', 'updated_at'])
         return participation
 
     def remove_participant(self, participation: EventParticipant) -> bool:
         """Remove participant from event"""
         participation.delete()
         return True
-
-    def get_participation_stats(self, event: Event) -> dict[str, int]:
-        """Aggregate participation counts for ``event`` (totals by role + RSVP).
-
-        Single GROUP BY query — cheap on the covering ``(event, role, rsvp_status)``
-        index recommended in the perf plan.
-        """
-        return EventParticipant.objects.filter(event=event).aggregate(
-            total=Count('id'),
-            owners=Count('id', filter=Q(role=EventParticipant.Role.OWNER)),
-            guests=Count('id', filter=Q(role=EventParticipant.Role.GUEST)),
-            moderators=Count('id', filter=Q(role=EventParticipant.Role.MODERATOR)),
-            accepted=Count('id', filter=Q(rsvp_status=EventParticipant.RsvpStatus.ACCEPTED)),
-            declined=Count('id', filter=Q(rsvp_status=EventParticipant.RsvpStatus.DECLINED)),
-            pending=Count('id', filter=Q(rsvp_status=EventParticipant.RsvpStatus.PENDING)),
-            attending=Count(
-                'id',
-                filter=Q(
-                    rsvp_status__in=[
-                        EventParticipant.RsvpStatus.ACCEPTED,
-                        EventParticipant.RsvpStatus.CONFIRMED_PLUS_ONE,
-                        EventParticipant.RsvpStatus.TENTATIVE,
-                        EventParticipant.RsvpStatus.MAYBE,
-                    ]
-                ),
-            ),
-        )
-
-    def bulk_update_rsvp_status(self, participant_ids: list[int], new_status: str) -> int:
-        """Bulk-set ``new_status`` on the given participants. Returns updated row count.
-
-        Skips rows already in ``new_status`` so ``responded_at`` is only stamped on
-        actual transitions.
-        """
-        return (
-            EventParticipant.objects.filter(id__in=participant_ids)
-            .exclude(rsvp_status=new_status)
-            .update(rsvp_status=new_status, responded_at=timezone.now())
-        )

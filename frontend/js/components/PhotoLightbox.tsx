@@ -77,14 +77,18 @@ const PhotoLightbox = ({ files, currentIndex, onClose, onNavigate }: PhotoLightb
             {currentIndex + 1} / {files.length}
           </span>
           <button
-            className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            type="button"
+            aria-label="Download original"
+            className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             onClick={handleDownload}
             title="Download original"
           >
             <Download className="h-5 w-5" />
           </button>
           <button
-            className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            type="button"
+            aria-label="Close"
+            className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             onClick={onClose}
             title="Close"
           >
@@ -96,7 +100,9 @@ const PhotoLightbox = ({ files, currentIndex, onClose, onNavigate }: PhotoLightb
       {/* Navigation arrows */}
       {hasPrev && (
         <button
-          className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white/80 transition-colors hover:bg-black/60 hover:text-white"
+          type="button"
+          aria-label="Previous photo"
+          className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white/80 transition-colors hover:bg-black/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex - 1); }}
         >
           <ChevronLeft className="h-6 w-6" />
@@ -104,7 +110,9 @@ const PhotoLightbox = ({ files, currentIndex, onClose, onNavigate }: PhotoLightb
       )}
       {hasNext && (
         <button
-          className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white/80 transition-colors hover:bg-black/60 hover:text-white"
+          type="button"
+          aria-label="Next photo"
+          className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white/80 transition-colors hover:bg-black/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex + 1); }}
         >
           <ChevronRight className="h-6 w-6" />

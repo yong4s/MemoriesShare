@@ -5,8 +5,6 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.events.dal.event_analytics_dal import EventAnalyticsDAL
-from apps.events.dal.event_dal import EventDAL
 from apps.events.serializers import EventListSerializer
 from apps.events.views.base import BaseEventAPIView
 from apps.shared.container import get_container
@@ -65,28 +63,20 @@ class UserEventAnalyticsAPIView(BaseEventAPIView):
     permission_classes = [IsAuthenticated]
 
     @cached_property
-    def analytics_dal(self):
-        return EventAnalyticsDAL()
-
-    @cached_property
-    def event_dal(self):
-        return EventDAL()
+    def analytics_service(self):
+        return get_container().analytics_service()
 
     def get(self, request):
         """Get user's event participation analytics"""
-        user_stats = self.analytics_dal.get_user_participation_statistics(request.user.id)
-
-        recent_events = self.event_dal.get_recent_events(request.user.id, limit=5)
-
-        upcoming_events = self.event_dal.get_upcoming_events(request.user.id, limit=5)
-
-        recent_serializer = EventListSerializer(recent_events, many=True)
-        upcoming_serializer = EventListSerializer(upcoming_events, many=True)
+        data = self.analytics_service.get_user_event_analytics(request.user.id)
+        user_stats = data['user_statistics']
+        recent_events = data['recent_events']
+        upcoming_events = data['upcoming_events']
 
         response_data = {
             'user_statistics': user_stats,
-            'recent_events': recent_serializer.data,
-            'upcoming_events': upcoming_serializer.data,
+            'recent_events': EventListSerializer(recent_events, many=True).data,
+            'upcoming_events': EventListSerializer(upcoming_events, many=True).data,
             'summary': {
                 'total_events': user_stats.get('total_events', 0),
                 'owned_events': user_stats.get('owned_events', 0),

@@ -229,7 +229,7 @@ const EventDetails = () => {
           <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-950">{eventDetails.event_name}</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-ink">{eventDetails.event_name}</h1>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant={isOwner ? 'owner' : userRole === 'moderator' ? 'moderator' : 'guest'} />
@@ -276,28 +276,28 @@ const EventDetails = () => {
             <div className="space-y-6 lg:col-span-2">
               {/* Details card */}
               <Card padding="lg">
-                <h3 className="mb-4 text-lg font-semibold text-slate-900">Event Details</h3>
+                <h3 className="mb-4 text-lg font-semibold text-ink">Event Details</h3>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
                     <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                     <div>
-                      <dt className="text-xs font-medium uppercase tracking-wider text-zinc-400">Date</dt>
-                      <dd className="text-sm font-medium text-slate-800">{formatDate(eventDetails.date)}</dd>
+                      <dt className="text-xs font-medium uppercase tracking-wider text-ink-faint">Date</dt>
+                      <dd className="text-sm font-medium text-ink">{formatDate(eventDetails.date)}</dd>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                     <div>
-                      <dt className="text-xs font-medium uppercase tracking-wider text-zinc-400">Time</dt>
-                      <dd className="text-sm font-medium text-slate-800">{eventDetails.all_day ? 'All day' : formatTime(eventDetails.time)}</dd>
+                      <dt className="text-xs font-medium uppercase tracking-wider text-ink-faint">Time</dt>
+                      <dd className="text-sm font-medium text-ink">{eventDetails.all_day ? 'All day' : formatTime(eventDetails.time)}</dd>
                     </div>
                   </div>
                   {eventDetails.location && (
                     <div className="flex items-start gap-3">
                       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                       <div>
-                        <dt className="text-xs font-medium uppercase tracking-wider text-zinc-400">Location</dt>
-                        <dd className="text-sm font-medium text-slate-800">{eventDetails.location}</dd>
+                        <dt className="text-xs font-medium uppercase tracking-wider text-ink-faint">Location</dt>
+                        <dd className="text-sm font-medium text-ink">{eventDetails.location}</dd>
                       </div>
                     </div>
                   )}
@@ -305,15 +305,15 @@ const EventDetails = () => {
                     <div className="flex items-start gap-3">
                       <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                       <div>
-                        <dt className="text-xs font-medium uppercase tracking-wider text-zinc-400">Address</dt>
-                        <dd className="text-sm font-medium text-slate-800">{eventDetails.address}</dd>
+                        <dt className="text-xs font-medium uppercase tracking-wider text-ink-faint">Address</dt>
+                        <dd className="text-sm font-medium text-ink">{eventDetails.address}</dd>
                       </div>
                     </div>
                   )}
                 </div>
                 {eventDetails.description && (
-                  <div className="mt-4 border-t border-zinc-100 pt-4">
-                    <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{eventDetails.description}</p>
+                  <div className="mt-4 border-t border-border-subtle pt-4">
+                    <p className="text-sm leading-relaxed text-ink-muted whitespace-pre-wrap">{eventDetails.description}</p>
                   </div>
                 )}
               </Card>
@@ -332,8 +332,8 @@ const EventDetails = () => {
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FolderOpen className="h-5 w-5 text-brand-500" />
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      Albums {albums.length > 0 && <span className="text-zinc-400">({albums.length})</span>}
+                    <h3 className="text-lg font-semibold text-ink">
+                      Albums {albums.length > 0 && <span className="text-ink-faint">({albums.length})</span>}
                     </h3>
                   </div>
                   {canModify && (
@@ -343,22 +343,22 @@ const EventDetails = () => {
                   )}
                 </div>
                 {albums.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No albums yet.</p>
+                  <p className="text-sm text-ink-muted">No albums yet.</p>
                 ) : (
                   <div className="space-y-2">
                     {albums.slice(0, 3).map((album) => (
                       <Link
                         key={album.album_uuid}
-                        className="flex items-center justify-between rounded-xl border border-zinc-100 px-4 py-3 text-sm transition-all hover:border-brand-200 hover:bg-brand-50/50"
+                        className="flex items-center justify-between rounded-xl border border-border-subtle px-4 py-3 text-sm transition-all hover:border-brand-200 hover:bg-brand-50/50"
                         to={`/events/${eventDetails.event_uuid}/albums/${album.album_uuid}`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
                             <FolderOpen className="h-4 w-4" />
                           </div>
-                          <span className="font-medium text-slate-800">{album.name}</span>
+                          <span className="font-medium text-ink">{album.name}</span>
                         </div>
-                        <span className="text-xs text-zinc-400">{album.mediafiles_count} files</span>
+                        <span className="text-xs text-ink-faint">{album.mediafiles_count} files</span>
                       </Link>
                     ))}
                     {albums.length > 3 && (
@@ -390,7 +390,7 @@ const EventDetails = () => {
                   <div className="mb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UserCheck className="h-5 w-5 text-brand-500" />
-                      <h3 className="text-lg font-semibold text-slate-900">Your RSVP</h3>
+                      <h3 className="text-lg font-semibold text-ink">Your RSVP</h3>
                     </div>
                     <Badge variant={getRsvpBadgeVariant(myRsvp.rsvp_status)}>{myRsvp.rsvp_status}</Badge>
                   </div>
@@ -421,7 +421,7 @@ const EventDetails = () => {
                     </div>
                   ) : (
                     <button
-                      className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                      className="w-full rounded-lg border border-border-subtle px-3 py-2 text-sm font-medium text-ink-muted transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
                       onClick={() => setShowRsvpButtons(true)}
                     >
                       Change RSVP
@@ -435,7 +435,7 @@ const EventDetails = () => {
                 <Card padding="lg">
                   <div className="mb-3 flex items-center gap-2">
                     <QrCode className="h-5 w-5 text-brand-500" />
-                    <h3 className="text-lg font-semibold text-slate-900">Invite Link</h3>
+                    <h3 className="text-lg font-semibold text-ink">Invite Link</h3>
                   </div>
                   {!inviteUrl ? (
                     <Button onClick={generateInviteQr} isLoading={isGenerating} icon={<Link2 className="h-4 w-4" />}>
@@ -444,7 +444,7 @@ const EventDetails = () => {
                   ) : (
                     <>
                       {qrCodeDataUrl && (
-                        <div className="mb-3 overflow-hidden rounded-xl border border-zinc-200 bg-white p-2">
+                        <div className="mb-3 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 p-2">
                           <img
                             alt="Event invitation QR code"
                             className="w-full"
@@ -452,8 +452,8 @@ const EventDetails = () => {
                           />
                         </div>
                       )}
-                      <div className="mb-3 rounded-lg bg-zinc-50 p-2">
-                        <p className="break-all text-xs text-slate-600">{inviteUrl}</p>
+                      <div className="mb-3 rounded-lg bg-surface-2 p-2">
+                        <p className="break-all text-xs text-ink-muted">{inviteUrl}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" onClick={handleCopyInviteLink} icon={<Copy className="h-3.5 w-3.5" />}>
@@ -473,9 +473,9 @@ const EventDetails = () => {
                 <Card padding="lg">
                   <div className="mb-3 flex items-center gap-2">
                     <UserPlus className="h-5 w-5 text-brand-500" />
-                    <h3 className="text-lg font-semibold text-slate-900">Invite Guest</h3>
+                    <h3 className="text-lg font-semibold text-ink">Invite Guest</h3>
                   </div>
-                  <p className="mb-3 text-sm text-zinc-500">Invite someone directly by name and email.</p>
+                  <p className="mb-3 text-sm text-ink-muted">Invite someone directly by name and email.</p>
                   <Button onClick={() => setShowInviteModal(true)} icon={<UserPlus className="h-4 w-4" />}>
                     Invite Guest
                   </Button>
@@ -485,14 +485,14 @@ const EventDetails = () => {
               {/* Organizer card */}
               {canModify && (
                 <Card padding="lg">
-                  <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">Organizer</h3>
+                  <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-ink-faint">Organizer</h3>
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
                       {eventDetails.owner_name?.charAt(0)?.toUpperCase() ?? '?'}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-800">{eventDetails.owner_name}</p>
-                      <p className="text-xs text-zinc-400">{eventDetails.owner_email}</p>
+                      <p className="text-sm font-medium text-ink">{eventDetails.owner_name}</p>
+                      <p className="text-xs text-ink-faint">{eventDetails.owner_email}</p>
                     </div>
                   </div>
                 </Card>
