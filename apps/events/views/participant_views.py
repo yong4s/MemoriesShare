@@ -6,7 +6,6 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.events.exceptions import EventPermissionError
 from apps.events.exceptions import ParticipantNotFoundError
 from apps.events.serializers import BulkGuestInviteSerializer
 from apps.events.serializers import EventParticipantDetailSerializer
@@ -16,7 +15,6 @@ from apps.events.serializers import GuestInviteSerializer
 from apps.events.serializers import ParticipantListQuerySerializer
 from apps.events.views.base import BaseEventAPIView
 from apps.shared.container import get_container
-from apps.shared.utils.redact import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +28,6 @@ class EventParticipantListAPIView(BaseEventAPIView):
     @cached_property
     def event_service(self):
         return get_container().event_service()
-
-    @cached_property
-    def user_service(self):
-        return get_container().user_service()
 
     def get(self, request, event_uuid):
         query_serializer = ParticipantListQuerySerializer(data=request.query_params)
@@ -60,100 +54,49 @@ class EventParticipantListAPIView(BaseEventAPIView):
             return self._handle_bulk_invite(request, event_uuid)
         return self._handle_single_invite(request, event_uuid)
 
-    def _resolve_invitee(self, guest_name: str, guest_email: str):
-        """Find an existing CustomUser by email or create a new guest one.
-
-        - **Existing registered user** → return them. The owner-initiated invite
-          will create a participant with PENDING RSVP; the user gets an email
-          and decides whether to accept. We do NOT call ``create_guest_user``
-          for registered emails (it raises ``GuestInviteRegisteredConflictError``
-          to prevent silent attach via guest pathways).
-        - **Existing guest user** → reuse the row.
-        - **No user yet** → create a fresh guest.
-        """
-        existing = self.user_service.get_user_by_email(guest_email, registered_only=False)
-        if existing:
-            return existing
-        return self.user_service.create_guest_user(guest_name=guest_name, guest_email=guest_email)
-
     def _handle_single_invite(self, request, event_uuid):
         serializer = GuestInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        invitee = self._resolve_invitee(
-            guest_name=serializer.validated_data['guest_name'],
-            guest_email=serializer.validated_data['guest_email'],
-        )
-
-        participation = self.event_service.add_participant_to_event(
+        participation = self.event_service.invite_guest(
             event_uuid=event_uuid,
-            user=invitee,
-            role='GUEST',
             guest_name=serializer.validated_data['guest_name'],
             guest_email=serializer.validated_data['guest_email'],
             requesting_user_id=request.user.id,
         )
 
         response_serializer = EventParticipantDetailSerializer(participation)
-        logger.info(f'Invited {invitee.email or invitee.guest_name} to event {event_uuid}')
+        logger.info('Invited a guest to event %s', event_uuid)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     def _handle_bulk_invite(self, request, event_uuid):
         serializer = BulkGuestInviteSerializer(data={'guests': request.data})
         serializer.is_valid(raise_exception=True)
 
-        invited_participants = []
-        failed_invitations = []
+        result = self.event_service.bulk_invite_guests(
+            event_uuid=event_uuid,
+            guests=serializer.validated_data['guests'],
+            requesting_user_id=request.user.id,
+        )
+        invited = result['invited']
+        failed = result['failed']
 
-        for guest_data in serializer.validated_data['guests']:
-            try:
-                invitee = self._resolve_invitee(
-                    guest_name=guest_data['guest_name'],
-                    guest_email=guest_data['guest_email'],
-                )
-
-                participation = self.event_service.add_participant_to_event(
-                    event_uuid=event_uuid,
-                    user=invitee,
-                    role='GUEST',
-                    guest_name=guest_data['guest_name'],
-                    guest_email=guest_data['guest_email'],
-                    requesting_user_id=request.user.id,
-                )
-                invited_participants.append(participation)
-            except Exception as e:
-                error_code = getattr(e, 'error_code', type(e).__name__)
-                failed_invitations.append({
-                    'guest_name': guest_data['guest_name'],
-                    'error_code': error_code,
-                })
-                logger.warning(
-                    'Guest invitation failed for %s: code=%s detail=%s',
-                    guest_data['guest_name'],
-                    error_code,
-                    redact_secrets(str(e)),
-                )
-
-        success_serializer = EventParticipantListSerializer(invited_participants, many=True)
-
+        success_serializer = EventParticipantListSerializer(invited, many=True)
         response_data = {
             'invited_participants': success_serializer.data,
-            'successful_count': len(invited_participants),
-            'failed_count': len(failed_invitations),
-            'failed_invitations': failed_invitations,
+            'successful_count': len(invited),
+            'failed_count': len(failed),
+            'failed_invitations': failed,
         }
 
-        if invited_participants and not failed_invitations:
+        if invited and not failed:
             status_code = status.HTTP_201_CREATED
-            logger.info(f'Bulk invited all {len(invited_participants)} guests to event {event_uuid}')
-        elif invited_participants:
+        elif invited:
             status_code = status.HTTP_207_MULTI_STATUS
-            total_guests = len(invited_participants) + len(failed_invitations)
-            logger.info(f'Bulk invited {len(invited_participants)}/{total_guests} guests to event {event_uuid}')
         else:
             status_code = status.HTTP_400_BAD_REQUEST
-            logger.warning(f'Failed to invite any guests to event {event_uuid}')
 
+        logger.info('Bulk invite to event %s: %s ok, %s failed', event_uuid, len(invited), len(failed))
         return Response(response_data, status=status_code)
 
 
@@ -168,9 +111,11 @@ class EventParticipantAPIView(BaseEventAPIView):
         return get_container().event_service()
 
     def get(self, request, event_uuid, participant_id):
-        event = self.event_service.dal.get_event_by_uuid_with_participants(event_uuid)
-        self.event_service.permission_service.validate_participant_or_owner_access(event, request.user.id)
-        participant = self.event_service.participant_dal.get_participant_by_pk(event, participant_id)
+        participant = self.event_service.get_participant_detail(
+            event_uuid=event_uuid,
+            participant_id=participant_id,
+            requesting_user_id=request.user.id,
+        )
         serializer = EventParticipantDetailSerializer(participant)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -178,25 +123,15 @@ class EventParticipantAPIView(BaseEventAPIView):
         serializer = EventParticipantRSVPUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        event = self.event_service.dal.get_event_by_uuid_with_participants(event_uuid)
-        self.event_service.permission_service.validate_participant_or_owner_access(event, request.user.id)
-        participant = self.event_service.participant_dal.get_participant_by_pk(event, participant_id)
-
-        if participant.user_id != request.user.id and not self.event_service.permission_service.can_user_modify_event(
-            event, request.user.id
-        ):
-            raise EventPermissionError(action='rsvp_update', event_id=str(event_uuid))
-
-        updated_participation = self.event_service.update_participant_rsvp(
+        updated_participation = self.event_service.update_participant_rsvp_by_id(
             event_uuid=event_uuid,
-            user=participant.user,
+            participant_id=participant_id,
             rsvp_status=serializer.validated_data['rsvp_status'],
             requesting_user_id=request.user.id,
         )
 
         response_serializer = EventParticipantDetailSerializer(updated_participation)
-
-        logger.info(f'Updated RSVP for participant {participant.user.id} in event {event_uuid}')
+        logger.info('Updated RSVP for participant %s in event %s', participant_id, event_uuid)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
