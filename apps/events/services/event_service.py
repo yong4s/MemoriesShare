@@ -7,6 +7,7 @@ from django.db import DatabaseError
 from django.db import IntegrityError
 from django.db import transaction
 
+from apps.accounts.services.user_service import UserService
 from apps.events.cache.event_cache_invalidator import EventCacheInvalidator
 from apps.events.cache.event_cache_service import EventCacheService
 from apps.events.dal.event_dal import EventDAL
@@ -15,15 +16,21 @@ from apps.events.exceptions import DuplicateParticipantError
 from apps.events.exceptions import EventCreationError
 from apps.events.exceptions import EventPermissionError
 from apps.events.exceptions import OwnerRemovalError
-from apps.events.exceptions import ParticipantError
 from apps.events.models.event import Event
 from apps.events.models.event_participant import EventParticipant
 from apps.events.services.permission_service import EventPermissionService
 from apps.events.tasks import cleanup_event_s3_prefix_task
 from apps.events.tasks import send_event_invitation_task
 from apps.events.validators import EventParticipantValidator
+from apps.shared.exceptions import AppError
+from apps.shared.utils.redact import redact_secrets
 
 logger = logging.getLogger(__name__)
+
+
+def build_event_s3_prefix(user_uuid: object, event_uuid: object) -> str:
+    """Canonical S3 prefix; all creation paths must build it here."""
+    return f'users/{user_uuid}/events/{event_uuid}'
 
 
 class EventService:
@@ -40,19 +47,21 @@ class EventService:
         permission_service: EventPermissionService,
         cache_service: EventCacheService,
         cache_invalidator: EventCacheInvalidator,
+        user_service: UserService,
     ):
         self.dal = dal
         self.participant_dal = participant_dal
         self.permission_service = permission_service
         self.cache_service = cache_service
         self.cache_invalidator = cache_invalidator
+        self.user_service = user_service
         self._rsvp_validator = EventParticipantValidator()
 
     @transaction.atomic
     def create_event(self, user, validated_data: dict[str, Any]) -> Event:
         """Create event with lazy S3 folder creation on first file upload"""
         event_uuid = uuid.uuid4()
-        s3_prefix = self._generate_s3_event_prefix(str(user.user_uuid), str(event_uuid))
+        s3_prefix = build_event_s3_prefix(user.user_uuid, event_uuid)
 
         event_data = validated_data.copy()
         event_data['event_uuid'] = event_uuid
@@ -204,6 +213,58 @@ class EventService:
 
         return participant
 
+    def invite_guest(
+        self,
+        event_uuid: str,
+        guest_name: str,
+        guest_email: str,
+        requesting_user_id: int,
+    ) -> EventParticipant:
+        invitee = self._resolve_invitee(guest_name=guest_name, guest_email=guest_email)
+        return self.add_participant_to_event(
+            event_uuid=event_uuid,
+            user=invitee,
+            guest_name=guest_name,
+            guest_email=guest_email,
+            requesting_user_id=requesting_user_id,
+        )
+
+    def bulk_invite_guests(
+        self,
+        event_uuid: str,
+        guests: list[dict[str, str]],
+        requesting_user_id: int,
+    ) -> dict[str, Any]:
+        """Per-guest partial failure: one bad invite must not abort the rest."""
+        invited: list[EventParticipant] = []
+        failed: list[dict[str, str]] = []
+        for guest in guests:
+            try:
+                invited.append(
+                    self.invite_guest(
+                        event_uuid=event_uuid,
+                        guest_name=guest['guest_name'],
+                        guest_email=guest['guest_email'],
+                        requesting_user_id=requesting_user_id,
+                    )
+                )
+            except AppError as exc:
+                error_code = getattr(exc, 'error_code', type(exc).__name__)
+                failed.append({'guest_name': guest['guest_name'], 'error_code': error_code})
+                logger.warning(
+                    'Guest invitation failed for %s: code=%s detail=%s',
+                    guest['guest_name'],
+                    error_code,
+                    redact_secrets(str(exc)),
+                )
+        return {'invited': invited, 'failed': failed}
+
+    def _resolve_invitee(self, guest_name: str, guest_email: str):
+        existing = self.user_service.get_user_by_email(guest_email, registered_only=False)
+        if existing:
+            return existing
+        return self.user_service.create_guest_user(guest_name=guest_name, guest_email=guest_email)
+
     @transaction.atomic
     def remove_participant_from_event(self, event_uuid: str, user, requesting_user_id: int) -> bool:
         # DAL raises EventNotFoundError if event doesn't exist
@@ -217,9 +278,6 @@ class EventService:
             raise OwnerRemovalError()
 
         participation = self.participant_dal.get_user_participation(event, user)
-        if not participation:
-            raise ParticipantError(operation='removal', reason='User is not a participant in this event')
-
         result = self.participant_dal.remove_participant(participation)
 
         logger.info(f'Participant removed: user {user.id} from event {event_uuid}')
@@ -238,8 +296,6 @@ class EventService:
         event = self.dal.get_event_by_uuid_with_participants(event_uuid)
 
         participation = self.participant_dal.get_user_participation(event, user)
-        if not participation:
-            raise ParticipantError(operation='rsvp_update', reason='User is not a participant in this event')
 
         if requesting_user_id != user.id and not self.permission_service.can_user_modify_event(
             event, requesting_user_id
@@ -259,6 +315,23 @@ class EventService:
 
         return updated_participant
 
+    def get_participant_detail(self, event_uuid: str, participant_id: int, requesting_user_id: int) -> EventParticipant:
+        event = self.dal.get_event_by_uuid_with_participants(event_uuid)
+        self.permission_service.validate_participant_or_owner_access(event, requesting_user_id)
+        return self.participant_dal.get_participant_by_pk(event, participant_id)
+
+    def update_participant_rsvp_by_id(
+        self, event_uuid: str, participant_id: int, rsvp_status: str, requesting_user_id: int
+    ) -> EventParticipant:
+        event = self.dal.get_event_by_uuid_with_participants(event_uuid)
+        participant = self.participant_dal.get_participant_by_pk(event, participant_id)
+        return self.update_participant_rsvp(
+            event_uuid=event_uuid,
+            user=participant.user,
+            rsvp_status=rsvp_status,
+            requesting_user_id=requesting_user_id,
+        )
+
     def _add_owner_participation(self, event: Event, user) -> EventParticipant:
         """Add event creator as owner participant"""
         participation_data = {
@@ -270,8 +343,3 @@ class EventService:
             'rsvp_status': EventParticipant.RsvpStatus.ACCEPTED,
         }
         return self.participant_dal.create_participant(participation_data)
-
-    def _generate_s3_event_prefix(self, user_uuid, event_uuid):
-        """Generate S3 event prefix (folder created lazily on first file upload)"""
-        return f'users/{user_uuid}/events/{event_uuid}'
-

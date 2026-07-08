@@ -11,8 +11,9 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
-from django.utils import timezone
 
+from apps.events.dal.event_participant_dal import EventParticipantDAL
+from apps.shared.storage.optimized_s3_service import get_optimized_s3_service
 from settings.celery import app
 
 logger = logging.getLogger(__name__)
@@ -31,15 +32,11 @@ def cleanup_event_s3_prefix_task(self, s3_prefix: str, event_uuid: str) -> None:
     Dispatched after a successful event-deletion commit. Idempotent: if the
     folder is already gone, the underlying delete is a no-op.
     """
-    # In-function imports avoid Django app-registry boot ordering issues
-    # when this module is imported eagerly at Celery worker startup.
-    from apps.shared.container import get_s3_service  # noqa: PLC0415
-
     if not s3_prefix:
         logger.debug('No s3_prefix supplied for event %s, skipping cleanup', event_uuid)
         return
 
-    s3_service = get_s3_service()
+    s3_service = get_optimized_s3_service()
     try:
         s3_service.delete_folder(s3_prefix)
         logger.info('Cleaned up S3 folder for event %s (prefix=%s)', event_uuid, s3_prefix)
@@ -48,32 +45,12 @@ def cleanup_event_s3_prefix_task(self, s3_prefix: str, event_uuid: str) -> None:
         raise  # let Celery retry per the decorator policy
 
 
-@app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={'max_retries': 3, 'countdown': 30},
-    retry_backoff=True,
-    retry_jitter=True,
-)
-def recompute_event_statistics_task(self, event_uuid: str) -> None:
-    """Re-warm the cached event statistics for ``event_uuid``.
-
-    Dispatched after participant CUD operations to keep the cache hot for
-    popular events. Cheap idempotent operation — safe to fire multiple times.
-    """
-    from apps.shared.container import get_analytics_service  # noqa: PLC0415
-
-    service = get_analytics_service()
-    service.warm_event_analytics_cache(event_uuid)
-    logger.debug('Warmed analytics cache for event %s', event_uuid)
-
-
 def _build_event_url(event_uuid: str) -> str | None:
     """Build a frontend link to the event detail page, or None if not configured."""
     base = getattr(settings, 'FRONTEND_URL', None)
     if not base:
         return None
-    return f'{base.rstrip("/")}/events/{event_uuid}'
+    return f'{base.rstrip('/')}/events/{event_uuid}'
 
 
 def _resolve_organizer_name(event) -> str:
@@ -97,25 +74,10 @@ def _resolve_organizer_name(event) -> str:
     retry_jitter=True,
 )
 def send_event_invitation_task(self, participant_id: int) -> None:
-    """Render and send the event-invitation email to a participant.
-
-    Idempotent re-runs are safe: re-sending updates ``invitation_sent_at``
-    again, but the recipient just gets one extra email per retry. The dispatch
-    site (`EventService.add_participant_to_event`) only enqueues once per
-    participant creation.
-    """
-    # In-function imports keep Celery worker boot order safe even if the
-    # events app hasn't fully populated when tasks.py is loaded.
-    from apps.events.models.event_participant import EventParticipant  # noqa: PLC0415
-
-    try:
-        participant = (
-            EventParticipant.objects
-            .select_related('event', 'user')
-            .prefetch_related('event__participants_through__user')
-            .get(pk=participant_id)
-        )
-    except EventParticipant.DoesNotExist:
+    """Render and send the event-invitation email to a participant."""
+    dal = EventParticipantDAL()
+    participant = dal.get_participant_for_invitation(participant_id)
+    if participant is None:
         logger.warning('send_event_invitation: participant %s no longer exists', participant_id)
         return
 
@@ -129,16 +91,10 @@ def send_event_invitation_task(self, participant_id: int) -> None:
         return
 
     event = participant.event
-    recipient_name = (
-        participant.guest_name
-        or getattr(participant.user, 'display_name', '')
-        or ''
-    ).strip()
+    recipient_name = (participant.guest_name or getattr(participant.user, 'display_name', '') or '').strip()
 
     event_date_human = event.date.strftime('%A, %d %b %Y') if event.date else ''
-    event_time_human = (
-        '' if event.all_day or not event.time else event.time.strftime('%H:%M')
-    )
+    event_time_human = '' if event.all_day or not event.time else event.time.strftime('%H:%M')
 
     context = {
         'app_name': 'MediaFlow',
@@ -182,9 +138,7 @@ def send_event_invitation_task(self, participant_id: int) -> None:
         msg = f'Email backend reported send=={sent} for participant {participant_id}'
         raise RuntimeError(msg)
 
-    EventParticipant.objects.filter(pk=participant_id).update(
-        invitation_sent_at=timezone.now(),
-    )
+    dal.mark_invitation_sent(participant_id)
     logger.info(
         'Sent event invitation to %s for event %s (participant %s)',
         recipient_email,

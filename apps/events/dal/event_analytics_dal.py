@@ -22,12 +22,6 @@ class EventAnalyticsDAL:
     participation analytics.
     """
 
-    def get_events_with_statistics(self, event_ids: list[int]) -> list[Event]:
-        """Get events with statistics for multiple IDs"""
-        return list(
-            Event.objects.filter(id__in=event_ids).with_statistics().prefetch_related('participants_through__user')
-        )
-
     def get_event_statistics(self, event: Event) -> dict[str, Any]:
         """Get detailed statistics for event"""
         participants = EventParticipant.objects.filter(event=event)
