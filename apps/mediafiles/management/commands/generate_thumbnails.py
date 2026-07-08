@@ -33,9 +33,7 @@ class Command(BaseCommand):
         dry_run = options['dry_run']
         batch_size = options['batch_size']
 
-        image_files = MediaFile.objects.filter(file_type__in=IMAGE_MIME_TYPES).values_list(
-            'file_uuid', flat=True
-        )
+        image_files = MediaFile.objects.filter(file_type__in=IMAGE_MIME_TYPES).values_list('file_uuid', flat=True)
         total = image_files.count()
 
         if total == 0:

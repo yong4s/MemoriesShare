@@ -4,8 +4,12 @@ import uuid
 
 from django.db import transaction
 
+from apps.accounts.dal.user_dal import UserDAL
 from apps.accounts.models import CustomUser
+from apps.albums.dal.album_dal import AlbumDAL
 from apps.albums.models import Album
+from apps.events.dal.event_dal import EventDAL
+from apps.events.exceptions import EventNotFoundError
 from apps.events.models import Event
 from apps.events.services.permission_service import EventPermissionService
 from apps.mediafiles.dal.media_file_dal import MediaFileDAL
@@ -18,6 +22,7 @@ from apps.mediafiles.tasks import cleanup_media_file_s3_task
 from apps.mediafiles.tasks import generate_thumbnail_task
 from apps.mediafiles.utils.thumbnail import derive_thumbnail_key
 from apps.mediafiles.utils.thumbnail import is_image_mime_type
+from apps.shared.exceptions import ResourceNotFoundError
 from apps.shared.utils.uuid_utils import S3KeyGenerator
 
 logger = logging.getLogger(__name__)
@@ -46,10 +51,16 @@ class MediaFileService:
         dal: MediaFileDAL,
         s3_service: MediaFileS3Service,
         permission_service: EventPermissionService,
+        event_dal: EventDAL,
+        album_dal: AlbumDAL,
+        user_dal: UserDAL,
     ):
         self.dal = dal
         self.s3_service = s3_service
         self.permission_service = permission_service
+        self.event_dal = event_dal
+        self.album_dal = album_dal
+        self.user_dal = user_dal
 
     def generate_upload_url(
         self, user_id: int, event_uuid: str, album_uuid: str, file_name: str, content_type: str
@@ -246,13 +257,9 @@ class MediaFileService:
     def _get_event_with_access_check(self, event_uuid: str, user_id: int) -> Event:
         """Get event by UUID and validate user access."""
         try:
-            event = Event.objects.prefetch_related(
-                'participants_through__user',
-            ).get(event_uuid=event_uuid)
-        except Event.DoesNotExist:
-            from apps.events.exceptions import EventNotFoundError
-
-            raise EventNotFoundError(str(event_uuid))
+            event = self.event_dal.get_event_by_uuid_with_participants(event_uuid)
+        except ResourceNotFoundError as exc:
+            raise EventNotFoundError(str(event_uuid)) from exc
 
         if not self.permission_service.has_event_access(event, user_id):
             raise MediaFilePermissionError(action='access_event')
@@ -261,26 +268,17 @@ class MediaFileService:
 
     def _get_album_for_event(self, album_uuid: str, event: Event) -> Album:
         """Get album by UUID and verify it belongs to the event."""
-        try:
-            return Album.objects.get(album_uuid=album_uuid, event=event)
-        except Album.DoesNotExist:
+        album = self.album_dal.find_by_uuid_for_event(album_uuid, event)
+        if album is None:
             raise AlbumNotFoundForMediaError(str(album_uuid))
-
-    def _get_album(self, album_pk: int) -> Album:
-        """Get album by PK with related event."""
-        try:
-            return Album.objects.select_related('event').get(pk=album_pk)
-        except Album.DoesNotExist:
-            raise AlbumNotFoundForMediaError()
+        return album
 
     def _get_user(self, user_id: int) -> CustomUser:
         """Get user by ID."""
-        try:
-            return CustomUser.objects.get(id=user_id)
-        except CustomUser.DoesNotExist:
-            from apps.shared.exceptions import ResourceNotFoundError
-
+        user = self.user_dal.get_by_id(user_id)
+        if user is None:
             raise ResourceNotFoundError('User not found', error_code='user_not_found')
+        return user
 
     def _validate_file_access(self, media_file, user_id: int) -> None:
         """Check if user can access a file (owner or event participant)."""
@@ -314,16 +312,15 @@ class MediaFileService:
     def _resolve_album(self, event: Event, album_uuid: str | None, s3_key: str) -> Album | None:
         """Resolve album from album_uuid or from s3_key, with fallback."""
         if album_uuid:
-            try:
-                return Album.objects.get(album_uuid=album_uuid, event=event)
-            except Album.DoesNotExist:
-                logger.warning('Album %s not found for event %s', album_uuid, event.event_uuid)
+            album = self.album_dal.find_by_uuid_for_event(album_uuid, event)
+            if album is not None:
+                return album
+            logger.warning('Album %s not found for event %s', album_uuid, event.event_uuid)
 
         parsed = S3KeyGenerator.parse_s3_key(s3_key)
         if parsed.get('album_uuid'):
-            try:
-                return Album.objects.get(album_uuid=parsed['album_uuid'], event=event)
-            except Album.DoesNotExist:
-                pass
+            album = self.album_dal.find_by_uuid_for_event(parsed['album_uuid'], event)
+            if album is not None:
+                return album
 
-        return Album.objects.filter(event=event).first()
+        return self.album_dal.get_first_for_event(event)
