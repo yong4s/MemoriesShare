@@ -25,6 +25,18 @@ class AlbumDAL:
         """Get all albums for a specific event with file_count annotation."""
         return Album.objects.for_event(event_id).select_related('event').with_file_counts()
 
+    def find_by_uuid_for_event(self, album_uuid, event) -> Album | None:
+        """Get a single album by UUID scoped to its event, or None if absent."""
+        try:
+            return Album.objects.get(album_uuid=album_uuid, event=event)
+        except Album.DoesNotExist:
+            return None
+
+    @handle_db_errors(model_name='Album')
+    def get_first_for_event(self, event) -> Album | None:
+        """Return the first album belonging to an event, or None."""
+        return Album.objects.filter(event=event).first()
+
     @handle_db_errors(model_name='Album')
     def create(self, **data) -> Album:
         """Create a new album."""

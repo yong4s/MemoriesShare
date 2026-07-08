@@ -13,7 +13,7 @@ from apps.mediafiles.services.media_file_service import MediaFileService
 MediafileService = MediaFileService
 
 __all__ = [
-    'MediaFileService',
     'MediaFileS3Service',
+    'MediaFileService',
     'MediafileService',
 ]

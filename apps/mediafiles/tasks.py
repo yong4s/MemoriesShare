@@ -1,8 +1,10 @@
 import logging
 
+from apps.mediafiles.models.media_file import MediaFile
 from apps.mediafiles.utils.thumbnail import derive_thumbnail_key
 from apps.mediafiles.utils.thumbnail import generate_thumbnail_bytes
 from apps.mediafiles.utils.thumbnail import is_image_mime_type
+from apps.shared.storage.optimized_s3_service import get_optimized_s3_service
 from settings.celery import app
 
 logger = logging.getLogger(__name__)
@@ -21,9 +23,6 @@ def generate_thumbnail_task(self, media_file_uuid: str):
     This task is idempotent — if the thumbnail already exists, it returns early.
     Dispatched after upload confirmation for image MIME types.
     """
-    from apps.mediafiles.models.media_file import MediaFile
-    from apps.shared.container import get_s3_service
-
     try:
         media_file = MediaFile.objects.get(file_uuid=media_file_uuid)
     except MediaFile.DoesNotExist:
@@ -35,7 +34,7 @@ def generate_thumbnail_task(self, media_file_uuid: str):
         return
 
     thumbnail_key = derive_thumbnail_key(media_file.S3_object_key)
-    s3_service = get_s3_service()
+    s3_service = get_optimized_s3_service()
 
     # Idempotent: skip if thumbnail already exists
     if s3_service.object_exists(thumbnail_key):
@@ -70,9 +69,7 @@ def cleanup_media_file_s3_task(self, object_key: str, thumbnail_key: str | None 
     committed — a rolled-back delete never destroys the object. Idempotent:
     deleting an already-absent key is a no-op.
     """
-    from apps.shared.container import get_s3_service
-
-    s3_service = get_s3_service()
+    s3_service = get_optimized_s3_service()
     s3_service.delete_object(object_key)
     if thumbnail_key:
         s3_service.delete_object(thumbnail_key)

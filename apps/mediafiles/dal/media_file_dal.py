@@ -20,19 +20,11 @@ class MediaFileDAL:
 
     def get_files_for_event(self, event) -> QuerySet[MediaFile]:
         """Get all media files for an event"""
-        return (
-            MediaFile.objects.filter(album_id__event=event)
-            .select_related('album_id')
-            .order_by('-created_at')
-        )
+        return MediaFile.objects.filter(album_id__event=event).select_related('album_id').order_by('-created_at')
 
     def get_files_for_user(self, user_id: int) -> QuerySet[MediaFile]:
         """Get all media files owned by a user"""
-        return (
-            MediaFile.objects.filter(user_id=user_id)
-            .select_related('album_id')
-            .order_by('-created_at')
-        )
+        return MediaFile.objects.filter(user_id=user_id).select_related('album_id').order_by('-created_at')
 
     @handle_db_errors(operation_type='create', model_name='MediaFile')
     def create(self, media_file_data: dict[str, Any]) -> MediaFile:
