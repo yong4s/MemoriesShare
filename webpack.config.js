@@ -150,10 +150,9 @@ module.exports = (env, argv) => {
     },
     optimization: {
       minimize: !isDev,
-      splitChunks: {
-        // include all types of chunks
-        chunks: 'all',
-      },
+      // Production is served by Django's own template, which references a single
+      // main.js. Dev injects every chunk via HtmlWebpackPlugin, so splitting is fine there.
+      splitChunks: isDev ? { chunks: 'all' } : false,
     },
     watchOptions: {
       ignored: [
